@@ -82,51 +82,15 @@ const CanvasContent = () => {
     const { theme, resolvedTheme } = useTheme();
     const [mounted, setMounted] = useState(false);
     const { fitView, zoomIn, zoomOut, getZoom, getViewport } = useReactFlow();
-    const [reactFlowNodes, setReactFlowNodes, onReactFlowNodesChange] = useNodesState(nodes);
-    const [reactFlowEdges, setReactFlowEdges, onReactFlowEdgesChange] = useEdgesState(edges);
-
     useEffect(() => {
         setMounted(true);
     }, []);
 
-    // Sync ReactFlow state with store state
-    useEffect(() => {
-        setReactFlowNodes(nodes);
-    }, [nodes, setReactFlowNodes]);
-
-    useEffect(() => {
-        setReactFlowEdges(edges);
-    }, [edges, setReactFlowEdges]);
-
-    // Performance optimization - viewport culling with debouncing
-    useEffect(() => {
-        const config = performanceEngine.getConfig();
-        if (config.enableLazyRendering) {
-            const viewport = getViewport();
-            const visible = performanceEngine.getVisibleNodes(nodes, viewport);
-            setFilteredNodes(visible);
-            performanceEngine.endRenderCycle(nodes.length, visible.length, visible.length);
-        } else {
-            setFilteredNodes(nodes);
-            performanceEngine.endRenderCycle(nodes.length, nodes.length, nodes.length);
-        }
-    }, [nodes, performanceEngine]); // Remove getViewport from dependencies to reduce re-renders
-
-    // Performance monitoring
-    useEffect(() => {
-        performanceEngine.startRenderCycle();
-    });
-
-    // Event listeners for panels
-    useEffect(() => {
-        const openPerformancePanel = () => setPerformancePanelOpen(true);
-
-        window.addEventListener('openPerformancePanel', openPerformancePanel);
-
-        return () => {
-            window.removeEventListener('openPerformancePanel', openPerformancePanel);
-        };
-    }, []);
+    // Selection monitoring to sync selectedNodes/selectedEdges
+    const selection = useMemo(() => ({
+        nodes: nodes.filter(n => n.selected).map(n => n.id),
+        edges: edges.filter(e => e.selected).map(e => e.id)
+    }), [nodes, edges]);
 
     const currentTheme = mounted ? (theme === 'system' ? resolvedTheme : theme) : 'light';
     const isDark = currentTheme === 'dark';
@@ -138,10 +102,27 @@ const CanvasContent = () => {
         return isDark ? '#555' : '#eee';
     };
 
+    // Performance monitoring
+    useEffect(() => {
+        performanceEngine.startRenderCycle();
+    });
+
+    // Event listeners for panels
+    useEffect(() => {
+        const openPerformancePanel = () => setPerformancePanelOpen(true);
+        window.addEventListener('openPerformancePanel', openPerformancePanel);
+        return () => window.removeEventListener('openPerformancePanel', openPerformancePanel);
+    }, []);
+
+    // Handle node change
     const handleNodeChange = useCallback((changes: any[]) => {
-        onReactFlowNodesChange(changes);
         onNodesChange(changes);
-    }, [onNodesChange, onReactFlowNodesChange]);
+    }, [onNodesChange]);
+
+    // Handle edge change
+    const handleEdgeChange = useCallback((changes: any[]) => {
+        onEdgesChange(changes);
+    }, [onEdgesChange]);
 
     const handleKeyDown = useCallback((event: KeyboardEvent) => {
         // Handle undo/redo
@@ -255,13 +236,10 @@ const CanvasContent = () => {
         <div className="w-full h-full bg-background transition-colors duration-300">
             <MarkerDefinitions />
             <ReactFlow
-                nodes={reactFlowNodes}
-                edges={reactFlowEdges}
+                nodes={nodes}
+                edges={edges}
                 onNodesChange={handleNodeChange}
-                onEdgesChange={(changes) => {
-                    onReactFlowEdgesChange(changes);
-                    onEdgesChange(changes);
-                }}
+                onEdgesChange={handleEdgeChange}
                 onConnect={onConnect}
                 nodeTypes={nodeTypes}
                 edgeTypes={edgeTypes}
@@ -271,7 +249,7 @@ const CanvasContent = () => {
                 maxZoom={4}
                 snapToGrid={true}
                 snapGrid={[20, 20]}
-                onlyRenderVisibleElements={true}
+                onlyRenderVisibleElements={false}
                 selectionMode={SelectionMode.Partial}
                 multiSelectionKeyCode="Control"
                 deleteKeyCode={null} // We handle delete manually

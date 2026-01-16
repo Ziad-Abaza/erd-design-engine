@@ -62,6 +62,13 @@ const DatabaseRelationshipEdge = ({
 
     // Calculate full path through all points
     const { edgePath, labelX, labelY, midpoints } = useMemo(() => {
+        // Safety check: Don't render if coordinates are not yet available or invalid
+        if (typeof sourceX !== 'number' || typeof sourceY !== 'number' ||
+            typeof targetX !== 'number' || typeof targetY !== 'number' ||
+            isNaN(sourceX) || isNaN(sourceY) || isNaN(targetX) || isNaN(targetY)) {
+            return { edgePath: "", labelX: 0, labelY: 0, midpoints: [] };
+        }
+
         let fullPath = "";
         let finalLabelX = 0;
         let finalLabelY = 0;
@@ -70,18 +77,13 @@ const DatabaseRelationshipEdge = ({
         // All points including source and target
         const points = [
             { x: sourceX, y: sourceY, pos: sourcePosition },
-            ...pathPoints.map(p => ({ ...p, pos: undefined })),
+            ...(data?.pathPoints || []).map(p => ({ ...p, pos: undefined })),
             { x: targetX, y: targetY, pos: targetPosition }
         ];
 
         for (let i = 0; i < points.length - 1; i++) {
             const start = points[i];
             const end = points[i + 1];
-
-            // For intermediate segments, we need to decide source/target positions
-            // If it's the first segment, use sourcePosition
-            // If it's the last segment, use targetPosition
-            // For middle segments, we infer based on direction
 
             let sPos = start.pos as Position;
             let tPos = end.pos as Position;
@@ -98,6 +100,7 @@ const DatabaseRelationshipEdge = ({
             }
 
             if (!tPos) {
+                // Peek ahead to next point or use current segment direction
                 const next = points[i + 2];
                 const dx = end.x - start.x;
                 const dy = end.y - start.y;
@@ -118,7 +121,9 @@ const DatabaseRelationshipEdge = ({
                 borderRadius: 0,
             });
 
-            fullPath += (i === 0 ? "" : " ") + segmentPath;
+            if (segmentPath) {
+                fullPath += (fullPath ? " " : "") + segmentPath;
+            }
 
             // Collect midpoints for adding new waypoints
             currentMidpoints.push({ x: segLabelX, y: segLabelY, index: i });
@@ -131,7 +136,7 @@ const DatabaseRelationshipEdge = ({
         }
 
         return { edgePath: fullPath, labelX: finalLabelX, labelY: finalLabelY, midpoints: currentMidpoints };
-    }, [sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, pathPoints]);
+    }, [sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data?.pathPoints]);
 
     const markerStart = useMemo(() => {
         switch (cardinality) {
