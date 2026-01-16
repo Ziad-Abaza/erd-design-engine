@@ -400,8 +400,8 @@ export class SQLGenerator {
             'LONGTEXT': 'LONGTEXT',
             'NCHAR': 'NCHAR(1)',
             'NVARCHAR': 'NVARCHAR(255)',
-            'ENUM': 'ENUM',
-            'SET': 'SET',
+            'ENUM': 'VARCHAR(50)',
+            'SET': 'TEXT',
             'JSON': 'JSON',
 
             // Date & Time Data Types
@@ -446,7 +446,11 @@ export class SQLGenerator {
             const baseType = upperType.split('(')[0];
             if (typeMap[baseType]) {
                 // For types that should have parameters, keep the original
-                if (['VARCHAR', 'CHAR', 'DECIMAL', 'NUMERIC', 'BINARY', 'VARBINARY', 'NCHAR', 'NVARCHAR'].includes(baseType)) {
+                if ([
+                    'VARCHAR', 'CHAR', 'DECIMAL', 'NUMERIC', 'BINARY', 'VARBINARY',
+                    'NCHAR', 'NVARCHAR', 'ENUM', 'SET', 'TIMESTAMP', 'DATETIME',
+                    'TIME', 'TINYINT', 'SMALLINT', 'MEDIUMINT', 'INT', 'BIGINT'
+                ].includes(baseType)) {
                     return upperType;
                 }
                 // For other types, use the mapped version
@@ -652,11 +656,11 @@ export class SQLGenerator {
     }
 
     private isNumericType(type: string): boolean {
-        const upperType = type.toUpperCase();
+        const baseType = type.split(/[ (]/)[0].toUpperCase().trim();
         return [
-            'INT', 'INTEGER', 'BIGINT', 'SMALLINT', 'TINYINT',
-            'DECIMAL', 'NUMERIC', 'FLOAT', 'DOUBLE', 'BOOLEAN', 'BOOL'
-        ].some(numericType => upperType.includes(numericType));
+            'INT', 'INTEGER', 'BIGINT', 'SMALLINT', 'TINYINT', 'MEDIUMINT',
+            'DECIMAL', 'NUMERIC', 'FLOAT', 'DOUBLE', 'BOOLEAN', 'BOOL', 'REAL', 'BIT'
+        ].includes(baseType);
     }
 }
 
