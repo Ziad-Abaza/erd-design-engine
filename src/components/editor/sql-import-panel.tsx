@@ -159,21 +159,22 @@ export function SqlImportPanel({ onClose }: { onClose: () => void }) {
 
                     if (sourceColumn && targetColumn) {
                         edges.push({
-                            id: `fk_${sourceTableId}_${sourceColumn.id}_to_${targetTableId}_${targetColumn.id}`,
-                            source: sourceTableId,
-                            target: targetTableId,
-                            sourceHandle: sourceColumn.id,
-                            targetHandle: targetColumn.id,
-                            type: 'relationship', // Changed from smoothstep to relationship for crows foot
-                            animated: true,
-                            style: { stroke: '#3b82f6', strokeWidth: 2 },
+                            id: `fk_${targetTableId}_${targetColumn.id}_to_${sourceTableId}_${sourceColumn.id}`,
+                            source: targetTableId, // Parent
+                            target: sourceTableId, // Child
+                            sourceHandle: targetColumn.id,
+                            targetHandle: sourceColumn.id,
+                            type: 'relationship',
+                            animated: false,
                             data: {
                                 relationship: {
-                                    sourceColumn: fk.columnName,
-                                    targetColumn: fk.referencedColumn,
+                                    sourceTable: fk.referencedTable,
+                                    targetTable: fk.tableName,
+                                    sourceColumn: fk.referencedColumn,
+                                    targetColumn: fk.columnName,
                                     cardinality: fk.cardinality || '1:N'
                                 },
-                                label: `${fk.columnName} → ${fk.referencedColumn}`,
+                                label: `${fk.referencedColumn} → ${fk.columnName}`,
                                 onDelete: fk.onDelete,
                                 onUpdate: fk.onUpdate,
                                 isValid: true
@@ -273,21 +274,22 @@ export function SqlImportPanel({ onClose }: { onClose: () => void }) {
 
                         if (sourceColumn && targetColumn) {
                             edges.push({
-                                id: `fk_${sourceTableId}_${sourceColumn.id}_to_${targetTableId}_${targetColumn.id}`,
-                                source: sourceTableId,
-                                target: targetTableId,
-                                sourceHandle: sourceColumn.id,
-                                targetHandle: targetColumn.id,
+                                id: `fk_${targetTableId}_${targetColumn.id}_to_${sourceTableId}_${sourceColumn.id}`,
+                                source: targetTableId, // Parent
+                                target: sourceTableId, // Child
+                                sourceHandle: targetColumn.id,
+                                targetHandle: sourceColumn.id,
                                 type: 'relationship',
-                                animated: true,
-                                style: { stroke: '#3b82f6', strokeWidth: 2 },
+                                animated: false,
                                 data: {
                                     relationship: {
-                                        sourceColumn: fk.columnName,
-                                        targetColumn: fk.referencedColumn,
+                                        sourceTable: fk.referencedTable,
+                                        targetTable: fk.tableName,
+                                        sourceColumn: fk.referencedColumn,
+                                        targetColumn: fk.columnName,
                                         cardinality: fk.cardinality || '1:N'
                                     },
-                                    label: `${fk.columnName} → ${fk.referencedColumn}`,
+                                    label: `${fk.referencedColumn} → ${fk.columnName}`,
                                     onDelete: fk.onDelete,
                                     onUpdate: fk.onUpdate,
                                     isValid: true

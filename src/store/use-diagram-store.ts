@@ -21,6 +21,7 @@ interface DiagramData {
     nodes: Node[];
     edges: Edge[];
     selectedNodes: string[];
+    selectedEdges: string[];
 }
 
 interface DiagramHistory {
@@ -41,6 +42,7 @@ type DiagramStore = DiagramData & {
     nodes: Node[];
     edges: Edge[];
     selectedNodes: string[];
+    selectedEdges: string[];
     history: DiagramHistory;
     snapshots: VersionSnapshot[];
     validationResult: ValidationResult | null;
@@ -85,6 +87,7 @@ type DiagramStore = DiagramData & {
     deleteSelectedNodes: () => void;
     // FK operations
     createForeignKey: (sourceTableId: string, sourceColumnId: string, targetTableId: string, targetColumnId: string) => void;
+    deleteRelationship: (edgeId: string, removeColumn?: boolean) => void;
     // Quick operations
     suggestIndexes: () => { tableId: string; columnName: string; reason: string }[];
     suggestForeignKeys: () => { sourceTableId: string; sourceColumnId: string; targetTableId: string; targetColumnId: string; confidence: number }[];
@@ -144,29 +147,38 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
     ],
     edges: [],
     selectedNodes: [],
-    
+    selectedEdges: [],
+
     // History state
     history: {
         past: [],
         present: {
             nodes: [],
             edges: [],
-            selectedNodes: []
+            selectedNodes: [],
+            selectedEdges: []
         },
         future: []
     },
     snapshots: [],
-    
+
     // Validation state
     validationResult: null,
     validationEnabled: true,
     autoValidationEnabled: true,
     validationTimeout: null,
     onNodesChange: (changes: NodeChange[]) => {
+        const currentNodes = get().nodes;
+        const newNodes = applyNodeChanges(changes, currentNodes);
+        const selectedNodeIds = newNodes
+            .filter(node => node.selected)
+            .map(node => node.id);
+
         set({
-            nodes: applyNodeChanges(changes, get().nodes),
+            nodes: newNodes,
+            selectedNodes: selectedNodeIds
         });
-        
+
         // Auto-validation with debouncing
         const { autoValidationEnabled } = get();
         if (autoValidationEnabled) {
@@ -181,10 +193,46 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
         }
     },
     onEdgesChange: (changes: EdgeChange[]) => {
+        const currentEdges = get().edges;
+        const newEdges = applyEdgeChanges(changes, currentEdges);
+        const selectedEdgeIds = newEdges
+            .filter(edge => edge.selected)
+            .map(edge => edge.id);
+
+        // Handle edge removals to clean up FK constraints automatically
+        let updatedNodes = get().nodes;
+        const removedChanges = changes.filter(change => change.type === 'remove');
+
+        if (removedChanges.length > 0) {
+            removedChanges.forEach(change => {
+                const edgeId = (change as any).id;
+                const edge = currentEdges.find(e => e.id === edgeId);
+
+                if (edge?.data?.relationship) {
+                    const { targetTable, targetColumn } = edge.data.relationship;
+                    updatedNodes = updatedNodes.map(node => {
+                        if (node.id === edge.target || node.data.label === targetTable) {
+                            return {
+                                ...node,
+                                data: {
+                                    ...node.data,
+                                    // Remove the foreign key column entirely
+                                    columns: node.data.columns.filter((c: Column) => c.name !== targetColumn)
+                                }
+                            };
+                        }
+                        return node;
+                    });
+                }
+            });
+        }
+
         set({
-            edges: applyEdgeChanges(changes, get().edges),
+            edges: newEdges,
+            selectedEdges: selectedEdgeIds,
+            nodes: updatedNodes
         });
-        
+
         // Auto-validation with debouncing
         const { autoValidationEnabled } = get();
         if (autoValidationEnabled) {
@@ -199,19 +247,95 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
         }
     },
     onConnect: (connection: Connection) => {
+        const { nodes, edges, validationEnabled } = get();
+
+        const sourceNode = nodes.find(n => n.id === connection.source);
+        const targetNode = nodes.find(n => n.id === connection.target);
+
+        if (!sourceNode || !targetNode || sourceNode.id === targetNode.id) return;
+
+        // Smart Relationship Logic:
+        // 1. Identify parent (source) and child (target)
+        // 2. Parent must have a PK
+        const sourcePK = sourceNode.data.columns.find((c: Column) => c.isPrimaryKey);
+        if (!sourcePK) {
+            console.warn('Source table must have a primary key to create a relationship');
+            // Still allow connection but maybe as a warning
+            set({
+                edges: addEdge({ ...connection, type: 'relationship', data: { isValid: false } }, edges),
+            });
+            return;
+        }
+
+        // 3. Check if target already has an FK referencing this table
+        const desiredFKName = `${sourceNode.data.label.toLowerCase()}_id`;
+        const existingFK = targetNode.data.columns.find((c: Column) =>
+            c.name.toLowerCase() === desiredFKName.toLowerCase() ||
+            (c.isForeignKey && c.referencedTable === sourceNode.data.label)
+        );
+
+        let finalTargetColumnName = existingFK?.name || desiredFKName;
+        let finalNodes = nodes;
+
+        if (!existingFK) {
+            // 4. Automatically create FK column in target
+            const newFK: Column = {
+                id: `c${Date.now()}`,
+                name: desiredFKName,
+                type: sourcePK.type,
+                isPrimaryKey: false,
+                isForeignKey: true,
+                isNullable: false,
+                isIndexed: true,
+                referencedTable: sourceNode.data.label,
+                referencedColumn: sourcePK.name,
+            };
+
+            finalNodes = nodes.map(node => {
+                if (node.id === targetNode.id) {
+                    return {
+                        ...node,
+                        data: {
+                            ...node.data,
+                            columns: [...node.data.columns, newFK]
+                        }
+                    };
+                }
+                return node;
+            });
+        }
+
+        // 5. Create the edge with semantic data
+        const newEdge: Edge = {
+            id: `rel_${sourceNode.id}_${targetNode.id}_${Date.now()}`,
+            source: connection.source as string,
+            target: connection.target as string,
+            sourceHandle: connection.sourceHandle,
+            targetHandle: connection.targetHandle,
+            type: 'relationship',
+            data: {
+                relationship: {
+                    sourceTable: sourceNode.data.label,
+                    sourceColumn: sourcePK.name,
+                    targetTable: targetNode.data.label,
+                    targetColumn: finalTargetColumnName,
+                    cardinality: '1:N', // Default to 1:N
+                    isIdentifying: true,
+                },
+                isValid: true,
+            },
+            animated: false,
+        };
+
         set({
-            edges: addEdge(connection, get().edges),
+            nodes: finalNodes,
+            edges: addEdge(newEdge, edges),
         });
-        
+
         // Auto-validation with debouncing
-        const { autoValidationEnabled } = get();
-        if (autoValidationEnabled) {
-            // Clear existing timeout
+        if (validationEnabled) {
             const currentTimeout = get().validationTimeout;
-            if (currentTimeout) {
-                clearTimeout(currentTimeout);
-            }
-            // Set new timeout with longer delay for better performance
+            if (currentTimeout) clearTimeout(currentTimeout);
             const timeoutId = setTimeout(() => get().runValidation(), 1000);
             set({ validationTimeout: timeoutId });
         }
@@ -219,13 +343,14 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
     setNodes: (nodes) => set({ nodes }),
     setEdges: (edges) => set({ edges }),
     clearDiagram: () => {
-        set({ 
-            nodes: [], 
-            edges: [], 
+        set({
+            nodes: [],
+            edges: [],
             selectedNodes: [],
+            selectedEdges: [],
             history: {
                 past: [],
-                present: { nodes: [], edges: [], selectedNodes: [] },
+                present: { nodes: [], edges: [], selectedNodes: [], selectedEdges: [] },
                 future: []
             },
             snapshots: [],
@@ -242,7 +367,7 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
     autoLayout: (options = {}) => {
         const { nodes, edges, setNodes, setEdges } = get();
         const { direction = 'TB', type = 'hierarchical' } = options;
-        
+
         let layoutResult;
         switch (type) {
             case 'force':
@@ -254,7 +379,7 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
             default:
                 layoutResult = LayoutEngine.autoLayout(nodes, edges, { direction });
         }
-        
+
         setNodes(layoutResult.nodes);
         setEdges(layoutResult.edges);
     },
@@ -268,7 +393,7 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
         if (!validationEnabled) {
             return { issues: [], summary: { errors: 0, warnings: 0, info: 0 }, score: 100 };
         }
-        
+
         const result = ValidationEngine.validateDiagram(nodes, edges);
         set({ validationResult: result });
         return result;
@@ -276,7 +401,7 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
     toggleValidation: () => {
         const { validationEnabled } = get();
         set({ validationEnabled: !validationEnabled });
-        
+
         // Run validation when enabling
         if (!validationEnabled) {
             get().runValidation();
@@ -293,10 +418,10 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
     fixValidationIssue: (issueId: string) => {
         const { validationResult } = get();
         if (!validationResult) return false;
-        
+
         const issue = validationResult.issues.find(i => i.id === issueId);
         if (!issue || !issue.autoFixable || !issue.fixAction) return false;
-        
+
         try {
             issue.fixAction();
             // Re-run validation after fix
@@ -326,15 +451,15 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
     deleteTable: (tableId) => {
         const { nodes, edges } = get();
         const filteredNodes = nodes.filter(node => node.id !== tableId);
-        const filteredEdges = edges.filter(edge => 
+        const filteredEdges = edges.filter(edge =>
             edge.source !== tableId && edge.target !== tableId
         );
         set({ nodes: filteredNodes, edges: filteredEdges });
     },
     renameTable: (tableId, newName) => {
         const { nodes } = get();
-        const updatedNodes = nodes.map(node => 
-            node.id === tableId 
+        const updatedNodes = nodes.map(node =>
+            node.id === tableId
                 ? { ...node, data: { ...node.data, label: newName } }
                 : node
         );
@@ -344,13 +469,13 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
         const { nodes } = get();
         const originalTable = nodes.find(node => node.id === tableId);
         if (!originalTable) return;
-        
+
         const duplicatedTable = {
             ...originalTable,
             id: `table_${Date.now()}`,
-            position: { 
-                x: originalTable.position.x + 50, 
-                y: originalTable.position.y + 50 
+            position: {
+                x: originalTable.position.x + 50,
+                y: originalTable.position.y + 50
             },
             data: {
                 ...originalTable.data,
@@ -362,17 +487,17 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
     // Column CRUD operations
     addColumn: (tableId, column) => {
         const { nodes } = get();
-        const updatedNodes = nodes.map(node => 
-            node.id === tableId 
-                ? { 
-                    ...node, 
-                    data: { 
-                        ...node.data, 
-                        columns: [...node.data.columns, { 
+        const updatedNodes = nodes.map(node =>
+            node.id === tableId
+                ? {
+                    ...node,
+                    data: {
+                        ...node.data,
+                        columns: [...node.data.columns, {
                             ...column,
                             id: `c${Date.now()}`
-                        }] 
-                    } 
+                        }]
+                    }
                 }
                 : node
         );
@@ -380,14 +505,14 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
     },
     deleteColumn: (tableId, columnId) => {
         const { nodes } = get();
-        const updatedNodes = nodes.map(node => 
-            node.id === tableId 
-                ? { 
-                    ...node, 
-                    data: { 
-                        ...node.data, 
-                        columns: node.data.columns.filter((col: Column) => col.id !== columnId) 
-                    } 
+        const updatedNodes = nodes.map(node =>
+            node.id === tableId
+                ? {
+                    ...node,
+                    data: {
+                        ...node.data,
+                        columns: node.data.columns.filter((col: Column) => col.id !== columnId)
+                    }
                 }
                 : node
         );
@@ -395,16 +520,16 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
     },
     renameColumn: (tableId, columnId, newName) => {
         const { nodes } = get();
-        const updatedNodes = nodes.map(node => 
-            node.id === tableId 
-                ? { 
-                    ...node, 
-                    data: { 
-                        ...node.data, 
-                        columns: node.data.columns.map((col: Column) => 
+        const updatedNodes = nodes.map(node =>
+            node.id === tableId
+                ? {
+                    ...node,
+                    data: {
+                        ...node.data,
+                        columns: node.data.columns.map((col: Column) =>
                             col.id === columnId ? { ...col, name: newName } : col
-                        ) 
-                    } 
+                        )
+                    }
                 }
                 : node
         );
@@ -414,10 +539,10 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
         const { nodes } = get();
         const updatedNodes = nodes.map(node => {
             if (node.id !== tableId) return node;
-            
+
             const columnToDuplicate = node.data.columns.find((col: Column) => col.id === columnId);
             if (!columnToDuplicate) return node;
-            
+
             return {
                 ...node,
                 data: {
@@ -440,35 +565,96 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
         set({ selectedNodes: nodeIds });
     },
     clearSelection: () => {
-        set({ selectedNodes: [] });
+        set({ selectedNodes: [], selectedEdges: [] });
     },
     deleteSelectedNodes: () => {
-        const { selectedNodes, nodes, edges } = get();
-        const filteredNodes = nodes.filter(node => !selectedNodes.includes(node.id));
-        const filteredEdges = edges.filter(edge => 
+        const { selectedNodes, selectedEdges, nodes, edges } = get();
+
+        let updatedNodes = nodes;
+        let updatedEdges = edges;
+
+        // 1. Handle selected edges first (clean up constraints)
+        selectedEdges.forEach(edgeId => {
+            const edge = edges.find(e => e.id === edgeId);
+            if (edge?.data?.relationship) {
+                const { targetTable, targetColumn } = edge.data.relationship;
+                updatedNodes = updatedNodes.map(node => {
+                    if (node.id === edge.target || node.data.label === targetTable) {
+                        return {
+                            ...node,
+                            data: {
+                                ...node.data,
+                                // Remove the foreign key column entirely
+                                columns: node.data.columns.filter((c: Column) => c.name !== targetColumn)
+                            }
+                        };
+                    }
+                    return node;
+                });
+            }
+        });
+        updatedEdges = updatedEdges.filter(edge => !selectedEdges.includes(edge.id));
+
+        // 2. Handle selected nodes (and their connected edges/constraints)
+        selectedNodes.forEach(nodeId => {
+            // Find edges where this node is the SOURCE (parent)
+            // We need to remove FK columns in the TARGET nodes
+            updatedEdges.forEach(edge => {
+                if (edge.source === nodeId && edge.data?.relationship) {
+                    const { targetTable, targetColumn } = edge.data.relationship;
+                    updatedNodes = updatedNodes.map(node => {
+                        if (node.id === edge.target || node.data.label === targetTable) {
+                            return {
+                                ...node,
+                                data: {
+                                    ...node.data,
+                                    // Remove the foreign key column entirely
+                                    columns: node.data.columns.filter((c: Column) => c.name !== targetColumn)
+                                }
+                            };
+                        }
+                        return node;
+                    });
+                }
+            });
+        });
+
+        // Final filter for nodes and edges
+        const finalNodes = updatedNodes.filter(node => !selectedNodes.includes(node.id));
+        const finalEdges = updatedEdges.filter(edge =>
             !selectedNodes.includes(edge.source) && !selectedNodes.includes(edge.target)
         );
-        set({ nodes: filteredNodes, edges: filteredEdges, selectedNodes: [] });
+
+        set({
+            nodes: finalNodes,
+            edges: finalEdges,
+            selectedNodes: [],
+            selectedEdges: []
+        });
     },
     // FK operations
     createForeignKey: (sourceTableId, sourceColumnId, targetTableId, targetColumnId) => {
         const { nodes, edges } = get();
-        const edgeId = `fk_${sourceTableId}_${sourceColumnId}_to_${targetTableId}_${targetColumnId}`;
-        
-        // Check if edge already exists
-        const existingEdge = edges.find(edge => edge.id === edgeId);
-        if (existingEdge) return;
-        
-        // Update source column to be a foreign key
+        const parentNode = nodes.find(n => n.id === targetTableId);
+        const childNode = nodes.find(n => n.id === sourceTableId);
+        if (!parentNode || !childNode) return;
+
+        const pkColumn = parentNode.data.columns.find((c: Column) => c.id === targetColumnId);
+        const fkColumn = childNode.data.columns.find((c: Column) => c.id === sourceColumnId);
+        if (!pkColumn || !fkColumn) return;
+
+        const edgeId = `fk_${parentNode.id}_${pkColumn.id}_to_${childNode.id}_${fkColumn.id}`;
+        if (edges.find(edge => edge.id === edgeId)) return;
+
         const updatedNodes = nodes.map(node => {
-            if (node.id === sourceTableId) {
+            if (node.id === childNode.id) {
                 return {
                     ...node,
                     data: {
                         ...node.data,
-                        columns: node.data.columns.map((col: Column) => 
-                            col.id === sourceColumnId 
-                                ? { ...col, isForeignKey: true }
+                        columns: node.data.columns.map((col: Column) =>
+                            col.id === fkColumn.id
+                                ? { ...col, isForeignKey: true, referencedTable: parentNode.data.label, referencedColumn: pkColumn.name }
                                 : col
                         )
                     }
@@ -476,28 +662,84 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
             }
             return node;
         });
-        
-        const newEdge = {
+
+        const newEdge: Edge = {
             id: edgeId,
-            source: sourceTableId,
-            target: targetTableId,
-            sourceHandle: sourceColumnId,
-            targetHandle: targetColumnId,
-            type: 'smoothstep',
-            animated: true,
-            style: { stroke: '#3b82f6', strokeWidth: 2 }
+            source: parentNode.id,
+            target: childNode.id,
+            sourceHandle: pkColumn.id,
+            targetHandle: fkColumn.id,
+            type: 'relationship',
+            data: {
+                relationship: {
+                    sourceTable: parentNode.data.label,
+                    targetTable: childNode.data.label,
+                    sourceColumn: pkColumn.name,
+                    targetColumn: fkColumn.name,
+                    cardinality: '1:N',
+                    isIdentifying: true,
+                },
+                isValid: true,
+            },
+            animated: false,
         };
-        
+
         set({ nodes: updatedNodes, edges: [...edges, newEdge] });
+    },
+    deleteRelationship: (edgeId, removeColumn = true) => {
+        const { nodes, edges } = get();
+        const edge = edges.find(e => e.id === edgeId);
+        if (!edge) return;
+
+        let updatedNodes = nodes;
+        if (removeColumn && edge.data?.relationship) {
+            const { targetTable, targetColumn } = edge.data.relationship;
+            updatedNodes = nodes.map(node => {
+                if (node.id === edge.target || node.data.label === targetTable) {
+                    return {
+                        ...node,
+                        data: {
+                            ...node.data,
+                            columns: node.data.columns.filter((c: Column) => c.name !== targetColumn)
+                        }
+                    };
+                }
+                return node;
+            });
+        } else if (edge.data?.relationship) {
+            // Just clear the isForeignKey flag and reference info if we don't remove the column
+            const { targetTable, targetColumn } = edge.data.relationship;
+            updatedNodes = nodes.map(node => {
+                if (node.id === edge.target || node.data.label === targetTable) {
+                    return {
+                        ...node,
+                        data: {
+                            ...node.data,
+                            columns: node.data.columns.map((c: Column) =>
+                                c.name === targetColumn
+                                    ? { ...c, isForeignKey: false, referencedTable: undefined, referencedColumn: undefined }
+                                    : c
+                            )
+                        }
+                    };
+                }
+                return node;
+            });
+        }
+
+        set({
+            nodes: updatedNodes,
+            edges: edges.filter(e => e.id !== edgeId)
+        });
     },
     // Quick operations
     suggestIndexes: () => {
         const { nodes } = get();
         const suggestions: { tableId: string; columnName: string; reason: string }[] = [];
-        
+
         nodes.forEach(node => {
             if (node.type !== 'table') return;
-            
+
             node.data.columns.forEach((column: Column) => {
                 // Suggest index for foreign keys
                 if (column.isForeignKey) {
@@ -507,7 +749,7 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
                         reason: 'Foreign key column should be indexed for better join performance'
                     });
                 }
-                
+
                 // Suggest index for unique columns
                 if (column.isUnique && !column.isPrimaryKey) {
                     suggestions.push({
@@ -516,7 +758,7 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
                         reason: 'Unique constraint benefits from index for faster lookups'
                     });
                 }
-                
+
                 // Suggest index for commonly queried columns (heuristic)
                 if (column.name.includes('email') || column.name.includes('name') || column.name.includes('status')) {
                     suggestions.push({
@@ -527,38 +769,38 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
                 }
             });
         });
-        
+
         return suggestions;
     },
     suggestForeignKeys: () => {
         const { nodes, edges } = get();
         const suggestions: { sourceTableId: string; sourceColumnId: string; targetTableId: string; targetColumnId: string; confidence: number }[] = [];
-        
+
         // Get existing relationships to avoid duplicates
         const existingRelationships = new Set(
             edges.map(edge => `${edge.source}-${edge.sourceHandle}-to-${edge.target}-${edge.targetHandle}`)
         );
-        
+
         nodes.forEach(sourceNode => {
             if (sourceNode.type !== 'table') return;
-            
+
             nodes.forEach(targetNode => {
                 if (targetNode.type !== 'table' || sourceNode.id === targetNode.id) return;
-                
+
                 sourceNode.data.columns.forEach((sourceColumn: Column) => {
                     // Skip primary keys and existing foreign keys
                     if (sourceColumn.isPrimaryKey || sourceColumn.isForeignKey) return;
-                    
+
                     targetNode.data.columns.forEach((targetColumn: Column) => {
                         // Only suggest relationships to primary keys
                         if (!targetColumn.isPrimaryKey) return;
-                        
+
                         // Skip if relationship already exists
                         const relationshipKey = `${sourceNode.id}-${sourceColumn.id}-to-${targetNode.id}-${targetColumn.id}`;
                         if (existingRelationships.has(relationshipKey)) return;
-                        
+
                         let confidence = 0;
-                        
+
                         // High confidence for naming patterns
                         if (sourceColumn.name === `${targetNode.data.label.toLowerCase()}_id` ||
                             sourceColumn.name === `${targetNode.data.label.toLowerCase()}id` ||
@@ -573,7 +815,7 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
                         else if (targetColumn.type === sourceColumn.type) {
                             confidence = 0.4;
                         }
-                        
+
                         if (confidence > 0.3) {
                             suggestions.push({
                                 sourceTableId: sourceNode.id,
@@ -587,7 +829,7 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
                 });
             });
         });
-        
+
         // Sort by confidence
         return suggestions.sort((a, b) => b.confidence - a.confidence);
     },
@@ -601,7 +843,7 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
         const { nodes } = get();
         const table = nodes.find(node => node.id === tableId);
         const column = table?.data.columns.find((col: Column) => col.id === columnId);
-        
+
         if (table && column) {
             console.log(`Created index on ${table.data.label}.${column.name}`);
             // In a full implementation, you might add an `isIndexed: true` property to the column
@@ -611,14 +853,14 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
     // Advanced property operations
     updateTableProperties: (tableId, properties) => {
         const { nodes } = get();
-        const updatedNodes = nodes.map(node => 
-            node.id === tableId 
-                ? { 
-                    ...node, 
-                    data: { 
-                        ...node.data, 
+        const updatedNodes = nodes.map(node =>
+            node.id === tableId
+                ? {
+                    ...node,
+                    data: {
+                        ...node.data,
                         ...properties
-                    } 
+                    }
                 }
                 : node
         );
@@ -626,16 +868,16 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
     },
     updateColumnProperties: (tableId, columnId, properties) => {
         const { nodes } = get();
-        const updatedNodes = nodes.map(node => 
-            node.id === tableId 
-                ? { 
-                    ...node, 
-                    data: { 
-                        ...node.data, 
-                        columns: node.data.columns.map((col: Column) => 
+        const updatedNodes = nodes.map(node =>
+            node.id === tableId
+                ? {
+                    ...node,
+                    data: {
+                        ...node.data,
+                        columns: node.data.columns.map((col: Column) =>
                             col.id === columnId ? { ...col, ...properties } : col
-                        ) 
-                    } 
+                        )
+                    }
                 }
                 : node
         );
@@ -646,12 +888,12 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
         const { nodes } = get();
         const updatedNodes = nodes.map(node => {
             if (node.id !== tableId) return node;
-            
+
             const newIndex = {
                 ...index,
                 id: `idx_${Date.now()}`
             };
-            
+
             return {
                 ...node,
                 data: {
@@ -666,12 +908,12 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
         const { nodes } = get();
         const updatedNodes = nodes.map(node => {
             if (node.id !== tableId) return node;
-            
+
             return {
                 ...node,
                 data: {
                     ...node.data,
-                    indexes: node.data.indexes?.map((index: TableIndex) => 
+                    indexes: node.data.indexes?.map((index: TableIndex) =>
                         index.id === indexId ? { ...index, ...properties } : index
                     ) || []
                 }
@@ -683,7 +925,7 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
         const { nodes } = get();
         const updatedNodes = nodes.map(node => {
             if (node.id !== tableId) return node;
-            
+
             return {
                 ...node,
                 data: {
@@ -710,7 +952,8 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
             },
             nodes: previous.nodes,
             edges: previous.edges,
-            selectedNodes: previous.selectedNodes
+            selectedNodes: previous.selectedNodes,
+            selectedEdges: previous.selectedEdges || []
         });
     },
     redo: () => {
@@ -728,7 +971,8 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
             },
             nodes: next.nodes,
             edges: next.edges,
-            selectedNodes: next.selectedNodes
+            selectedNodes: next.selectedNodes,
+            selectedEdges: next.selectedEdges || []
         });
     },
     canUndo: () => {
@@ -740,12 +984,12 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
         return history.future.length > 0;
     },
     saveSnapshot: (name?: string, description?: string) => {
-        const { nodes, edges, selectedNodes, snapshots } = get();
+        const { nodes, edges, selectedNodes, selectedEdges, snapshots } = get();
         const snapshot: VersionSnapshot = {
             id: `snapshot_${Date.now()}`,
             name: name || `Snapshot ${new Date().toLocaleString()}`,
             timestamp: Date.now(),
-            state: { nodes, edges, selectedNodes },
+            state: { nodes, edges, selectedNodes, selectedEdges },
             description
         };
 
@@ -764,7 +1008,8 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
             },
             nodes: snapshot.state.nodes,
             edges: snapshot.state.edges,
-            selectedNodes: snapshot.state.selectedNodes
+            selectedNodes: snapshot.state.selectedNodes,
+            selectedEdges: snapshot.state.selectedEdges || []
         });
     },
     deleteSnapshot: (snapshotId: string) => {
@@ -776,11 +1021,12 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
     },
     // Persistence
     saveToLocal: () => {
-        const { nodes, edges, selectedNodes, snapshots } = get();
+        const { nodes, edges, selectedNodes, selectedEdges, snapshots } = get();
         const data = {
             nodes,
             edges,
             selectedNodes,
+            selectedEdges,
             snapshots,
             timestamp: Date.now()
         };
@@ -802,7 +1048,8 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
                     present: {
                         nodes: data.nodes || [],
                         edges: data.edges || [],
-                        selectedNodes: data.selectedNodes || []
+                        selectedNodes: data.selectedNodes || [],
+                        selectedEdges: data.selectedEdges || []
                     },
                     future: []
                 }
@@ -814,11 +1061,12 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
         }
     },
     exportState: () => {
-        const { nodes, edges, selectedNodes, snapshots } = get();
+        const { nodes, edges, selectedNodes, selectedEdges, snapshots } = get();
         return JSON.stringify({
             nodes,
             edges,
             selectedNodes,
+            selectedEdges,
             snapshots,
             exportedAt: new Date().toISOString()
         }, null, 2);
@@ -840,7 +1088,8 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
                     present: {
                         nodes: data.nodes || [],
                         edges: data.edges || [],
-                        selectedNodes: data.selectedNodes || []
+                        selectedNodes: data.selectedNodes || [],
+                        selectedEdges: data.selectedEdges || []
                     },
                     future: []
                 }
@@ -851,24 +1100,24 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
             return false;
         }
     },
-    
+
     // Performance operations
     getDiagramStats: () => {
         const { nodes, edges } = get();
         let totalColumns = 0;
-        
+
         nodes.forEach(node => {
             if (node.data.columns) {
                 totalColumns += node.data.columns.length;
             }
         });
-        
+
         let memoryUsage;
         if ('memory' in performance) {
             const memory = (performance as any).memory;
             memoryUsage = memory.usedJSHeapSize / 1024 / 1024; // MB
         }
-        
+
         return {
             totalNodes: nodes.length,
             totalEdges: edges.length,
@@ -876,39 +1125,39 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
             memoryUsage
         };
     },
-    
+
     optimizePerformance: () => {
         const { nodes, edges } = get();
-        
+
         // Remove duplicate edges
         const uniqueEdges = edges.filter((edge, index, self) =>
-            index === self.findIndex((e) => 
-                e.source === edge.source && 
-                e.target === edge.target && 
-                e.sourceHandle === edge.sourceHandle && 
+            index === self.findIndex((e) =>
+                e.source === edge.source &&
+                e.target === edge.target &&
+                e.sourceHandle === edge.sourceHandle &&
                 e.targetHandle === edge.targetHandle
             )
         );
-        
+
         // Remove orphaned edges (edges that reference non-existent nodes)
         const nodeIds = new Set(nodes.map(n => n.id));
-        const validEdges = uniqueEdges.filter(edge => 
+        const validEdges = uniqueEdges.filter(edge =>
             nodeIds.has(edge.source) && nodeIds.has(edge.target)
         );
-        
+
         set({ edges: validEdges });
     },
-    
+
     cleanupUnusedElements: () => {
         const { nodes, edges } = get();
-        
+
         // Find connected node IDs
         const connectedNodeIds = new Set<string>();
         edges.forEach(edge => {
             connectedNodeIds.add(edge.source);
             connectedNodeIds.add(edge.target);
         });
-        
+
         // Keep nodes that are either connected or have no connections (isolated tables might be intentional)
         // For now, we'll only remove completely empty tables
         const cleanedNodes = nodes.filter(node => {
@@ -917,7 +1166,7 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
             }
             return true;
         });
-        
+
         set({ nodes: cleanedNodes });
     },
 }));

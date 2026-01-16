@@ -7,7 +7,7 @@ import { Download, FileImage, FileText, Upload, Database, Layout, ChevronDown, A
 import { SqlImportPanel } from './sql-import-panel';
 
 const Toolbar = () => {
-    const { selectedNodes, deleteSelectedNodes, addTable, detectRelationships, autoLayout, runValidation, clearDiagram } = useDiagramStore();
+    const { selectedNodes, selectedEdges, deleteSelectedNodes, addTable, detectRelationships, autoLayout, runValidation, clearDiagram } = useDiagramStore();
     const [showImportPanel, setShowImportPanel] = useState(false);
     const [showLayoutOptions, setShowLayoutOptions] = useState(false);
 
@@ -46,8 +46,8 @@ const Toolbar = () => {
 
     return (
         <>
-            <Panel 
-                position="top-right" 
+            <Panel
+                position="top-right"
                 className="react-flow__panel flex flex-col gap-3 p-3 w-48"
             >
                 <div className="bg-card/95 backdrop-blur-sm rounded-lg shadow-md border border-border p-3 transition-all duration-200 hover:shadow-lg">
@@ -57,7 +57,7 @@ const Toolbar = () => {
                             <div className="text-xs font-semibold text-foreground">ERD Editor</div>
                             <div className="text-xs text-muted-foreground">v0.1</div>
                         </div>
-                        
+
                         {/* Add Table Button */}
                         <button
                             onClick={handleAddNewTable}
@@ -76,19 +76,19 @@ const Toolbar = () => {
                         </button>
 
                         {/* Delete Selected Button */}
-                        {selectedNodes.length > 0 && (
+                        {(selectedNodes.length > 0 || selectedEdges.length > 0) && (
                             <button
                                 onClick={deleteSelectedNodes}
                                 className="bg-red-600 hover:bg-red-700 text-white rounded transition-colors p-2 text-xs font-medium"
                             >
-                                Delete Selected ({selectedNodes.length})
+                                Delete Selected ({selectedNodes.length + selectedEdges.length})
                             </button>
                         )}
 
                         <div className="w-full h-px bg-border"></div>
 
                         {/* Detect Relationship Button */}
-                        <button 
+                        <button
                             onClick={detectRelationships}
                             className="bg-card/80 hover:bg-card text-foreground border border-border rounded transition-colors p-2 text-xs font-medium"
                         >
@@ -97,7 +97,7 @@ const Toolbar = () => {
 
                         {/* Smart Layout Button */}
                         <div className="relative">
-                            <button 
+                            <button
                                 onClick={() => setShowLayoutOptions(!showLayoutOptions)}
                                 className="bg-card/80 hover:bg-card text-foreground border border-border rounded transition-colors p-2 text-xs font-medium flex items-center gap-1"
                             >
@@ -105,7 +105,7 @@ const Toolbar = () => {
                                 Smart Layout
                                 <ChevronDown className="w-3 h-3" />
                             </button>
-                            
+
                             {/* Layout Options Dropdown */}
                             {showLayoutOptions && (
                                 <div className="absolute top-full left-0 mt-1 bg-card border border-border rounded-md shadow-lg z-50 min-w-48">
@@ -142,7 +142,7 @@ const Toolbar = () => {
                         <div className="w-full h-px bg-border"></div>
 
                         {/* Validate Button */}
-                        <button 
+                        <button
                             onClick={runValidation}
                             className="bg-card/80 hover:bg-card text-foreground border border-border rounded transition-colors p-2 text-xs font-medium"
                         >
@@ -152,7 +152,7 @@ const Toolbar = () => {
                         <div className="w-full h-px bg-border"></div>
 
                         {/* Performance Button */}
-                        <button 
+                        <button
                             onClick={openPerformancePanel}
                             className="bg-card/80 hover:bg-card text-foreground border border-border rounded transition-colors p-2 text-xs font-medium flex items-center gap-2"
                         >
@@ -165,9 +165,9 @@ const Toolbar = () => {
                         {/* Import Section */}
                         <div className="flex flex-col gap-2">
                             <div className="text-xs font-semibold text-foreground">Import</div>
-                            
+
                             {/* Import SQL Button */}
-                            <button 
+                            <button
                                 onClick={openImportPanel}
                                 className="bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded transition-colors p-2 text-xs font-medium flex items-center gap-2"
                             >
@@ -181,9 +181,9 @@ const Toolbar = () => {
                         {/* Export Section */}
                         <div className="flex flex-col gap-2">
                             <div className="text-xs font-semibold text-foreground">Export</div>
-                            
+
                             {/* Export Diagram Button */}
-                            <button 
+                            <button
                                 onClick={openExportPanel}
                                 className="bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded transition-colors p-2 text-xs font-medium flex items-center gap-2"
                             >
@@ -194,7 +194,7 @@ const Toolbar = () => {
                     </div>
                 </div>
             </Panel>
-            
+
             {/* SQL Import Panel */}
             {showImportPanel && (
                 <SqlImportPanel onClose={() => setShowImportPanel(false)} />

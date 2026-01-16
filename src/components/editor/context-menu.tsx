@@ -4,11 +4,11 @@ import { memo, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 import { useDiagramStore } from '@/store/use-diagram-store';
-import { 
-    Edit3, 
-    Trash2, 
-    Copy, 
- Plus,
+import {
+    Edit3,
+    Trash2,
+    Copy,
+    Plus,
     KeyRound,
     Link,
     Fingerprint,
@@ -129,21 +129,21 @@ const ContextMenu = ({ actions, position, onClose }: ContextMenuProps) => {
     );
 };
 
-export const TableContextMenu = memo(({ 
-    tableId, 
-    tableName, 
-    position, 
-    onClose 
+export const TableContextMenu = memo(({
+    tableId,
+    tableName,
+    position,
+    onClose
 }: {
     tableId: string;
     tableName: string;
     position: { x: number; y: number };
     onClose: () => void;
 }) => {
-    const { 
-        renameTable, 
-        deleteTable, 
-        duplicateTable, 
+    const {
+        renameTable,
+        deleteTable,
+        duplicateTable,
         addColumn,
         selectNode
     } = useDiagramStore();
@@ -172,7 +172,7 @@ export const TableContextMenu = memo(({
             id: 'separator1',
             label: '',
             separator: true,
-            onClick: () => {}
+            onClick: () => { }
         },
         {
             id: 'add-column',
@@ -196,7 +196,7 @@ export const TableContextMenu = memo(({
             id: 'separator2',
             label: '',
             separator: true,
-            onClick: () => {}
+            onClick: () => { }
         },
         {
             id: 'delete',
@@ -214,16 +214,16 @@ export const TableContextMenu = memo(({
     return <ContextMenu actions={actions} position={position} onClose={onClose} />;
 });
 
-export const ColumnContextMenu = memo(({ 
-    tableId, 
-    columnId, 
-    columnName, 
+export const ColumnContextMenu = memo(({
+    tableId,
+    columnId,
+    columnName,
     columnType,
     isPrimaryKey,
     isForeignKey,
     isUnique,
-    position, 
-    onClose 
+    position,
+    onClose
 }: {
     tableId: string;
     columnId: string;
@@ -235,9 +235,9 @@ export const ColumnContextMenu = memo(({
     position: { x: number; y: number };
     onClose: () => void;
 }) => {
-    const { 
-        renameColumn, 
-        deleteColumn, 
+    const {
+        renameColumn,
+        deleteColumn,
         duplicateColumn,
         addColumn
     } = useDiagramStore();
@@ -266,7 +266,7 @@ export const ColumnContextMenu = memo(({
             id: 'separator1',
             label: '',
             separator: true,
-            onClick: () => {}
+            onClick: () => { }
         },
         {
             id: 'toggle-pk',
@@ -300,7 +300,7 @@ export const ColumnContextMenu = memo(({
             id: 'separator2',
             label: '',
             separator: true,
-            onClick: () => {}
+            onClick: () => { }
         },
         {
             id: 'delete',
@@ -309,6 +309,48 @@ export const ColumnContextMenu = memo(({
             onClick: () => {
                 if (confirm(`Are you sure you want to delete column "${columnName}"?`)) {
                     deleteColumn(tableId, columnId);
+                }
+            },
+            danger: true
+        }
+    ];
+
+    return <ContextMenu actions={actions} position={position} onClose={onClose} />;
+});
+
+export const RelationshipContextMenu = memo(({
+    edgeId,
+    sourceTable,
+    targetTable,
+    targetColumn,
+    position,
+    onClose
+}: {
+    edgeId: string;
+    sourceTable: string;
+    targetTable: string;
+    targetColumn: string;
+    position: { x: number; y: number };
+    onClose: () => void;
+}) => {
+    const { deleteRelationship } = useDiagramStore();
+
+    const actions: ContextMenuAction[] = [
+        {
+            id: 'delete-rel',
+            label: 'Delete Relationship Only',
+            icon: <Link className="w-3 h-3" />,
+            onClick: () => {
+                deleteRelationship(edgeId, false);
+            }
+        },
+        {
+            id: 'delete-full',
+            label: `Delete Relationship + ${targetColumn}`,
+            icon: <Trash2 className="w-3 h-3" />,
+            onClick: () => {
+                if (confirm(`Remove relationship and delete column "${targetColumn}" from "${targetTable}"?`)) {
+                    deleteRelationship(edgeId, true);
                 }
             },
             danger: true

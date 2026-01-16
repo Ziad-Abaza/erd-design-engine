@@ -246,14 +246,16 @@ export class SQLGenerator {
                 continue;
             }
 
-            const constraintName = `fk_${sourceNode.data.label}_${sourceColumn.name}_to_${targetNode.data.label}_${targetColumn.name}`;
+            const constraintName = `fk_${targetNode.data.label}_${targetColumn.name}_to_${sourceNode.data.label}_${sourceColumn.name}`;
 
-            sql += `ALTER TABLE \`${sourceNode.data.label}\`\n`;
+            sql += `ALTER TABLE \`${targetNode.data.label}\`\n`;
             sql += `  ADD CONSTRAINT \`${constraintName}\`\n`;
-            sql += `  FOREIGN KEY (\`${sourceColumn.name}\`) REFERENCES \`${targetNode.data.label}\`(\`${targetColumn.name}\`)`;
+            sql += `  FOREIGN KEY (\`${targetColumn.name}\`) REFERENCES \`${sourceNode.data.label}\`(\`${sourceColumn.name}\`)`;
 
             // Add ON DELETE and ON UPDATE actions (default to RESTRICT)
-            sql += ' ON DELETE RESTRICT ON UPDATE RESTRICT';
+            const onDelete = edge.data?.onDelete || 'RESTRICT';
+            const onUpdate = edge.data?.onUpdate || 'RESTRICT';
+            sql += ` ON DELETE ${onDelete} ON UPDATE ${onUpdate}`;
 
             sql += ';\n\n';
             hasConstraints = true;

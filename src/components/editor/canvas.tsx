@@ -22,6 +22,8 @@ import { useDiagramStore } from '@/store/use-diagram-store';
 import { useTheme } from 'next-themes';
 import TableNode from './nodes/table-node';
 import RelationshipEdge from './edges/relationship-edge';
+import DatabaseRelationshipEdge from './edges/database-relationship-edge';
+import MarkerDefinitions from './edges/marker-definitions';
 import LayoutControls from './layout-controls';
 import SuggestionsPanel from './suggestions-panel';
 import Toolbar from './toolbar';
@@ -34,13 +36,13 @@ import { PerformancePanel } from './performance-panel';
 import { PerformanceEngine } from '@/lib/performance-engine';
 import { AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 
-// Memoize nodeTypes and edgeTypes outside component to prevent re-creation
+// Define nodeTypes and edgeTypes outside component to prevent re-creation
 const nodeTypes = {
     table: TableNode,
 };
 
 const edgeTypes = {
-    relationship: RelationshipEdge,
+    relationship: DatabaseRelationshipEdge,
 };
 
 const CanvasContent = () => {
@@ -49,13 +51,14 @@ const CanvasContent = () => {
     const [performancePanelOpen, setPerformancePanelOpen] = useState(false);
     const [performanceEngine] = useState(() => new PerformanceEngine());
     const [filteredNodes, setFilteredNodes] = useState<Node[]>([]);
-    const { 
-        nodes, 
-        edges, 
-        onNodesChange, 
-        onEdgesChange, 
+    const {
+        nodes,
+        edges,
+        onNodesChange,
+        onEdgesChange,
         onConnect,
         selectedNodes,
+        selectedEdges,
         selectNode,
         selectMultipleNodes,
         clearSelection,
@@ -116,9 +119,9 @@ const CanvasContent = () => {
     // Event listeners for panels
     useEffect(() => {
         const openPerformancePanel = () => setPerformancePanelOpen(true);
-        
+
         window.addEventListener('openPerformancePanel', openPerformancePanel);
-        
+
         return () => {
             window.removeEventListener('openPerformancePanel', openPerformancePanel);
         };
@@ -137,23 +140,7 @@ const CanvasContent = () => {
     const handleNodeChange = useCallback((changes: any[]) => {
         onReactFlowNodesChange(changes);
         onNodesChange(changes);
-        
-        // Handle selection changes
-        const selectionChanges = changes.filter(change => change.type === 'select');
-        if (selectionChanges.length > 0) {
-            const selectedNodeIds = reactFlowNodes
-                .filter(node => node.selected)
-                .map(node => node.id);
-            
-            if (selectedNodeIds.length === 1) {
-                selectNode(selectedNodeIds[0]);
-            } else if (selectedNodeIds.length > 1) {
-                selectMultipleNodes(selectedNodeIds);
-            } else {
-                clearSelection();
-            }
-        }
-    }, [reactFlowNodes, onNodesChange, onReactFlowNodesChange, selectNode, selectMultipleNodes, clearSelection]);
+    }, [onNodesChange, onReactFlowNodesChange]);
 
     const handleKeyDown = useCallback((event: KeyboardEvent) => {
         // Handle undo/redo
@@ -169,13 +156,13 @@ const CanvasContent = () => {
                 redo();
             }
         }
-        
+
         // Handle save (Ctrl+S)
         if ((event.ctrlKey || event.metaKey) && event.key === 's') {
             event.preventDefault();
             saveToLocal();
         }
-        
+
         // Handle load (Ctrl+O)
         if ((event.ctrlKey || event.metaKey) && event.key === 'o') {
             event.preventDefault();
@@ -183,7 +170,7 @@ const CanvasContent = () => {
         }
 
         if (event.key === 'Delete' || event.key === 'Backspace') {
-            if (selectedNodes.length > 0) {
+            if (selectedNodes.length > 0 || selectedEdges.length > 0) {
                 event.preventDefault();
                 deleteSelectedNodes();
             }
@@ -197,7 +184,7 @@ const CanvasContent = () => {
             const allNodeIds = nodes.map(node => node.id);
             selectMultipleNodes(allNodeIds);
         }
-    }, [selectedNodes, nodes, deleteSelectedNodes, clearSelection, selectMultipleNodes, undo, redo, canUndo, canRedo, saveToLocal, loadFromLocal]);
+    }, [selectedNodes, selectedEdges, nodes, deleteSelectedNodes, clearSelection, selectMultipleNodes, undo, redo, canUndo, canRedo, saveToLocal, loadFromLocal]);
 
     useEffect(() => {
         window.addEventListener('keydown', handleKeyDown);
@@ -265,6 +252,7 @@ const CanvasContent = () => {
 
     return (
         <div className="w-full h-full bg-background transition-colors duration-300">
+            <MarkerDefinitions />
             <ReactFlow
                 nodes={reactFlowNodes}
                 edges={reactFlowEdges}
@@ -275,6 +263,7 @@ const CanvasContent = () => {
                 }}
                 onConnect={onConnect}
                 nodeTypes={nodeTypes}
+                edgeTypes={edgeTypes}
                 fitView
                 className="bg-background"
                 minZoom={0.1}
@@ -291,7 +280,7 @@ const CanvasContent = () => {
                     color={isDark ? '#333' : '#ddd'}
                     variant={BackgroundVariant.Dots}
                 />
-                <Controls 
+                <Controls
                     className="bg-card/95 backdrop-blur-sm border-border shadow-lg rounded-lg overflow-hidden transition-all duration-200 hover:shadow-xl"
                     showZoom={true}
                     showFitView={true}
@@ -313,7 +302,7 @@ const CanvasContent = () => {
                     zoomable
                     position="bottom-right"
                 />
-                
+
                 {/* Validation Status Panel */}
                 {validationEnabled && (
                     <Panel position="top-left" className="bg-card/95 backdrop-blur-sm border border-border rounded-lg shadow-lg p-3">
@@ -347,22 +336,22 @@ const CanvasContent = () => {
                         </div>
                     </Panel>
                 )}
-                
+
                 <Toolbar />
             </ReactFlow>
             <PropertyPanel />
             <BottomToolbar />
-            <ValidationPanel 
-                isOpen={validationPanelOpen} 
-                onClose={() => setValidationPanelOpen(false)} 
+            <ValidationPanel
+                isOpen={validationPanelOpen}
+                onClose={() => setValidationPanelOpen(false)}
             />
-            <ExportPanel 
-                isOpen={exportPanelOpen} 
-                onClose={() => setExportPanelOpen(false)} 
+            <ExportPanel
+                isOpen={exportPanelOpen}
+                onClose={() => setExportPanelOpen(false)}
             />
-            <PerformancePanel 
-                isOpen={performancePanelOpen} 
-                onClose={() => setPerformancePanelOpen(false)} 
+            <PerformancePanel
+                isOpen={performancePanelOpen}
+                onClose={() => setPerformancePanelOpen(false)}
             />
             <UnifiedToolbar />
         </div>
