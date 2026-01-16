@@ -303,27 +303,6 @@ The project uses modern tooling for optimal development experience:
 - Tailwind CSS for styling
 - Conventional commits for messages
 
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- [React Flow](https://reactflow.dev/) for the powerful diagram engine
-- [Dagre](https://github.com/dagrejs/dagre) for automatic layout algorithms
-- [Next.js](https://nextjs.org/) for the excellent React framework
-- [Tailwind CSS](https://tailwindcss.com/) for the utility-first CSS framework
-- [Radix UI](https://www.radix-ui.com/) for accessible UI primitives
-- [TanStack Query](https://tanstack.com/query) for server-state management
-- [Lucide](https://lucide.dev/) for beautiful icon sets
-
-## 📞 Support & Community
-
-- 🐛 **Report Issues**: [GitHub Issues](https://github.com/your-username/erd-editor/issues)
-- 💡 **Feature Requests**: [GitHub Discussions](https://github.com/your-username/erd-editor/discussions)
-- 📖 **Documentation**: [Wiki](https://github.com/your-username/erd-editor/wiki)
-- 🎯 **Roadmap**: Check our [Project Board](https://github.com/your-username/erd-editor/projects)
-
 ---
 
 <div align="center">
