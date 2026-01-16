@@ -3,13 +3,18 @@
 import React, { useState } from 'react';
 import { Panel } from 'reactflow';
 import { useDiagramStore } from '@/store/use-diagram-store';
-import { Download, FileImage, FileText, Upload, Database, Layout, ChevronDown } from 'lucide-react';
+import { Download, FileImage, FileText, Upload, Database, Layout, ChevronDown, Activity } from 'lucide-react';
 import { SqlImportPanel } from './sql-import-panel';
 
 const Toolbar = () => {
     const { selectedNodes, deleteSelectedNodes, addTable, detectRelationships, autoLayout, runValidation } = useDiagramStore();
     const [showImportPanel, setShowImportPanel] = useState(false);
     const [showLayoutOptions, setShowLayoutOptions] = useState(false);
+
+    const openPerformancePanel = () => {
+        const event = new CustomEvent('openPerformancePanel');
+        window.dispatchEvent(event);
+    };
 
     const handleAddNewTable = () => {
         const tableName = prompt('Enter table name:');
@@ -127,6 +132,17 @@ const Toolbar = () => {
                             className="bg-card/80 hover:bg-card text-foreground border border-border rounded transition-colors p-2 text-xs font-medium"
                         >
                             Validate
+                        </button>
+
+                        <div className="w-full h-px bg-border"></div>
+
+                        {/* Performance Button */}
+                        <button 
+                            onClick={openPerformancePanel}
+                            className="bg-card/80 hover:bg-card text-foreground border border-border rounded transition-colors p-2 text-xs font-medium flex items-center gap-2"
+                        >
+                            <Activity className="w-3 h-3" />
+                            Performance
                         </button>
 
                         <div className="w-full h-px bg-border"></div>

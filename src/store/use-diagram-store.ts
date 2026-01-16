@@ -102,6 +102,10 @@ type DiagramStore = DiagramData & {
     loadFromLocal: () => boolean;
     exportState: () => string;
     importState: (jsonString: string) => boolean;
+    // Performance operations
+    getDiagramStats: () => { totalNodes: number; totalEdges: number; totalColumns: number; memoryUsage?: number };
+    optimizePerformance: () => void;
+    cleanupUnusedElements: () => void;
 };
 
 export const useDiagramStore = create<DiagramStore>((set, get) => ({
@@ -808,5 +812,74 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
             console.error('Failed to import state:', error);
             return false;
         }
+    },
+    
+    // Performance operations
+    getDiagramStats: () => {
+        const { nodes, edges } = get();
+        let totalColumns = 0;
+        
+        nodes.forEach(node => {
+            if (node.data.columns) {
+                totalColumns += node.data.columns.length;
+            }
+        });
+        
+        let memoryUsage;
+        if ('memory' in performance) {
+            const memory = (performance as any).memory;
+            memoryUsage = memory.usedJSHeapSize / 1024 / 1024; // MB
+        }
+        
+        return {
+            totalNodes: nodes.length,
+            totalEdges: edges.length,
+            totalColumns,
+            memoryUsage
+        };
+    },
+    
+    optimizePerformance: () => {
+        const { nodes, edges } = get();
+        
+        // Remove duplicate edges
+        const uniqueEdges = edges.filter((edge, index, self) =>
+            index === self.findIndex((e) => 
+                e.source === edge.source && 
+                e.target === edge.target && 
+                e.sourceHandle === edge.sourceHandle && 
+                e.targetHandle === edge.targetHandle
+            )
+        );
+        
+        // Remove orphaned edges (edges that reference non-existent nodes)
+        const nodeIds = new Set(nodes.map(n => n.id));
+        const validEdges = uniqueEdges.filter(edge => 
+            nodeIds.has(edge.source) && nodeIds.has(edge.target)
+        );
+        
+        set({ edges: validEdges });
+    },
+    
+    cleanupUnusedElements: () => {
+        const { nodes, edges } = get();
+        
+        // Find connected node IDs
+        const connectedNodeIds = new Set<string>();
+        edges.forEach(edge => {
+            connectedNodeIds.add(edge.source);
+            connectedNodeIds.add(edge.target);
+        });
+        
+        // Keep nodes that are either connected or have no connections (isolated tables might be intentional)
+        // For now, we'll only remove completely empty tables
+        const cleanedNodes = nodes.filter(node => {
+            if (!node.data.columns || node.data.columns.length === 0) {
+                return false; // Remove empty tables
+            }
+            return true;
+        });
+        
+        set({ nodes: cleanedNodes });
     },
 }));

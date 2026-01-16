@@ -12,6 +12,9 @@ import ReactFlow, {
     useNodesState,
     useEdgesState,
     SelectionMode,
+    Viewport,
+    Node,
+    OnViewportChange,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import './reactflow-enhancements.css';
@@ -27,6 +30,8 @@ import BottomToolbar from './bottom-toolbar';
 import { ValidationPanel } from './validation-panel';
 import ExportPanel from './export-panel';
 import ExportButton from './export-button';
+import { PerformancePanel } from './performance-panel';
+import { PerformanceEngine } from '@/lib/performance-engine';
 import { AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 
 // Memoize nodeTypes and edgeTypes outside component to prevent re-creation
@@ -41,6 +46,9 @@ const edgeTypes = {
 const CanvasContent = () => {
     const [validationPanelOpen, setValidationPanelOpen] = useState(false);
     const [exportPanelOpen, setExportPanelOpen] = useState(false);
+    const [performancePanelOpen, setPerformancePanelOpen] = useState(false);
+    const [performanceEngine] = useState(() => new PerformanceEngine());
+    const [filteredNodes, setFilteredNodes] = useState<Node[]>([]);
     const { 
         nodes, 
         edges, 
@@ -69,7 +77,7 @@ const CanvasContent = () => {
     } = useDiagramStore();
     const { theme, resolvedTheme } = useTheme();
     const [mounted, setMounted] = useState(false);
-    const { fitView, zoomIn, zoomOut, getZoom } = useReactFlow();
+    const { fitView, zoomIn, zoomOut, getZoom, getViewport } = useReactFlow();
     const [reactFlowNodes, setReactFlowNodes, onReactFlowNodesChange] = useNodesState(nodes);
     const [reactFlowEdges, setReactFlowEdges, onReactFlowEdgesChange] = useEdgesState(edges);
 
@@ -85,6 +93,36 @@ const CanvasContent = () => {
     useEffect(() => {
         setReactFlowEdges(edges);
     }, [edges, setReactFlowEdges]);
+
+    // Performance optimization - viewport culling
+    useEffect(() => {
+        const config = performanceEngine.getConfig();
+        if (config.enableLazyRendering) {
+            const viewport = getViewport();
+            const visible = performanceEngine.getVisibleNodes(nodes, viewport);
+            setFilteredNodes(visible);
+            performanceEngine.endRenderCycle(nodes.length, visible.length, visible.length);
+        } else {
+            setFilteredNodes(nodes);
+            performanceEngine.endRenderCycle(nodes.length, nodes.length, nodes.length);
+        }
+    }, [nodes, getViewport, performanceEngine]);
+
+    // Performance monitoring
+    useEffect(() => {
+        performanceEngine.startRenderCycle();
+    });
+
+    // Event listeners for panels
+    useEffect(() => {
+        const openPerformancePanel = () => setPerformancePanelOpen(true);
+        
+        window.addEventListener('openPerformancePanel', openPerformancePanel);
+        
+        return () => {
+            window.removeEventListener('openPerformancePanel', openPerformancePanel);
+        };
+    }, []);
 
     const currentTheme = mounted ? (theme === 'system' ? resolvedTheme : theme) : 'light';
     const isDark = currentTheme === 'dark';
@@ -278,7 +316,7 @@ const CanvasContent = () => {
                 
                 {/* Validation Status Panel */}
                 {validationEnabled && (
-                    <Panel position="top-right" className="bg-card/95 backdrop-blur-sm border border-border rounded-lg shadow-lg p-3">
+                    <Panel position="top-left" className="bg-card/95 backdrop-blur-sm border border-border rounded-lg shadow-lg p-3">
                         <div className="flex items-center gap-2 text-sm">
                             {getValidationStatusIcon()}
                             <span className="font-medium">{getValidationStatusText()}</span>
@@ -321,6 +359,10 @@ const CanvasContent = () => {
             <ExportPanel 
                 isOpen={exportPanelOpen} 
                 onClose={() => setExportPanelOpen(false)} 
+            />
+            <PerformancePanel 
+                isOpen={performancePanelOpen} 
+                onClose={() => setPerformancePanelOpen(false)} 
             />
             <ExportButton />
         </div>
