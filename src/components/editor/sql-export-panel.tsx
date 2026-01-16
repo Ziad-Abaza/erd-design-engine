@@ -6,9 +6,8 @@ import { useDiagramStore } from '@/store/use-diagram-store';
 import { generateSQL, SQLOptions, SQLGenerationResult } from '@/lib/sql-generator';
 import { cn } from '@/lib/utils';
 
-const SQLExportPanel = () => {
+const SQLExportPanel = ({ isOpen = true, onClose }: { isOpen?: boolean; onClose?: () => void }) => {
     const { nodes, edges, selectedNodes } = useDiagramStore();
-    const [isOpen, setIsOpen] = useState(false);
     const [sqlResult, setSqlResult] = useState<SQLGenerationResult | null>(null);
     const [options, setOptions] = useState<SQLOptions>({
         includeComments: true,
@@ -114,17 +113,7 @@ const SQLExportPanel = () => {
 
     // button to open sql export panel
     if (!isOpen) {
-        return (
-            <div className="fixed bottom-4 left-4 z-40">
-                <button
-                    onClick={() => setIsOpen(true)}
-                    className="bg-green-600 text-white p-3 rounded-full shadow-lg hover:bg-green-700 transition-colors"
-                    title="Export SQL"
-                >
-                    <Database className="w-5 h-5" />
-                </button>
-            </div>
-        );
+        return null;
     }
 
     return (
@@ -149,7 +138,7 @@ const SQLExportPanel = () => {
                             Regenerate
                         </button>
                         <button
-                            onClick={() => setIsOpen(false)}
+                            onClick={onClose || (() => {})}
                             className="text-muted-foreground hover:text-foreground p-1 rounded"
                         >
                             ×

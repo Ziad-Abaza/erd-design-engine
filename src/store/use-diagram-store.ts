@@ -46,6 +46,7 @@ type DiagramStore = DiagramData & {
     validationResult: ValidationResult | null;
     validationEnabled: boolean;
     autoValidationEnabled: boolean;
+    validationTimeout: ReturnType<typeof setTimeout> | null;
     onNodesChange: OnNodesChange;
     onEdgesChange: OnEdgesChange;
     onConnect: OnConnect;
@@ -159,15 +160,23 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
     validationResult: null,
     validationEnabled: true,
     autoValidationEnabled: true,
+    validationTimeout: null,
     onNodesChange: (changes: NodeChange[]) => {
         set({
             nodes: applyNodeChanges(changes, get().nodes),
         });
         
-        // Auto-validation
+        // Auto-validation with debouncing
         const { autoValidationEnabled } = get();
         if (autoValidationEnabled) {
-            setTimeout(() => get().runValidation(), 300);
+            // Clear existing timeout
+            const currentTimeout = get().validationTimeout;
+            if (currentTimeout) {
+                clearTimeout(currentTimeout);
+            }
+            // Set new timeout with longer delay for better performance
+            const timeoutId = setTimeout(() => get().runValidation(), 1000);
+            set({ validationTimeout: timeoutId });
         }
     },
     onEdgesChange: (changes: EdgeChange[]) => {
@@ -175,10 +184,17 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
             edges: applyEdgeChanges(changes, get().edges),
         });
         
-        // Auto-validation
+        // Auto-validation with debouncing
         const { autoValidationEnabled } = get();
         if (autoValidationEnabled) {
-            setTimeout(() => get().runValidation(), 300);
+            // Clear existing timeout
+            const currentTimeout = get().validationTimeout;
+            if (currentTimeout) {
+                clearTimeout(currentTimeout);
+            }
+            // Set new timeout with longer delay for better performance
+            const timeoutId = setTimeout(() => get().runValidation(), 1000);
+            set({ validationTimeout: timeoutId });
         }
     },
     onConnect: (connection: Connection) => {
@@ -186,10 +202,17 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
             edges: addEdge(connection, get().edges),
         });
         
-        // Auto-validation
+        // Auto-validation with debouncing
         const { autoValidationEnabled } = get();
         if (autoValidationEnabled) {
-            setTimeout(() => get().runValidation(), 300);
+            // Clear existing timeout
+            const currentTimeout = get().validationTimeout;
+            if (currentTimeout) {
+                clearTimeout(currentTimeout);
+            }
+            // Set new timeout with longer delay for better performance
+            const timeoutId = setTimeout(() => get().runValidation(), 1000);
+            set({ validationTimeout: timeoutId });
         }
     },
     setNodes: (nodes) => set({ nodes }),

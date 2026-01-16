@@ -29,7 +29,7 @@ import PropertyPanel from './property-panel';
 import BottomToolbar from './bottom-toolbar';
 import { ValidationPanel } from './validation-panel';
 import ExportPanel from './export-panel';
-import ExportButton from './export-button';
+import UnifiedToolbar from './unified-toolbar';
 import { PerformancePanel } from './performance-panel';
 import { PerformanceEngine } from '@/lib/performance-engine';
 import { AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
@@ -94,7 +94,7 @@ const CanvasContent = () => {
         setReactFlowEdges(edges);
     }, [edges, setReactFlowEdges]);
 
-    // Performance optimization - viewport culling
+    // Performance optimization - viewport culling with debouncing
     useEffect(() => {
         const config = performanceEngine.getConfig();
         if (config.enableLazyRendering) {
@@ -106,7 +106,7 @@ const CanvasContent = () => {
             setFilteredNodes(nodes);
             performanceEngine.endRenderCycle(nodes.length, nodes.length, nodes.length);
         }
-    }, [nodes, getViewport, performanceEngine]);
+    }, [nodes, performanceEngine]); // Remove getViewport from dependencies to reduce re-renders
 
     // Performance monitoring
     useEffect(() => {
@@ -364,7 +364,7 @@ const CanvasContent = () => {
                 isOpen={performancePanelOpen} 
                 onClose={() => setPerformancePanelOpen(false)} 
             />
-            <ExportButton />
+            <UnifiedToolbar />
         </div>
     );
 };

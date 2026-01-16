@@ -41,7 +41,7 @@ export function PerformancePanel({ isOpen, onClose }: PerformancePanelProps) {
       updateTableGroups();
       updateRecommendations();
       
-      const interval = setInterval(updateMetrics, 1000);
+      const interval = setInterval(updateMetrics, 3000);
       return () => clearInterval(interval);
     }
   }, [isOpen, nodes, edges]);

@@ -5,7 +5,7 @@ import { History, Save, Download, Upload, RotateCcw, RotateCw, Trash2, Eye, Plus
 import { useDiagramStore } from '@/store/use-diagram-store';
 import { cn } from '@/lib/utils';
 
-const HistoryPanel = () => {
+const HistoryPanel = ({ isOpen = true, onClose }: { isOpen?: boolean; onClose?: () => void }) => {
     const { 
         undo, 
         redo, 
@@ -21,7 +21,6 @@ const HistoryPanel = () => {
         importState
     } = useDiagramStore();
 
-    const [isOpen, setIsOpen] = useState(false);
     const [snapshots, setSnapshots] = useState(getSnapshots());
     const [snapshotName, setSnapshotName] = useState('');
     const [snapshotDescription, setSnapshotDescription] = useState('');
@@ -45,7 +44,7 @@ const HistoryPanel = () => {
 
     const handleLoadSnapshot = (snapshotId: string) => {
         loadSnapshot(snapshotId);
-        setIsOpen(false);
+        if (onClose) onClose();
     };
 
     const handleDeleteSnapshot = (snapshotId: string) => {
@@ -74,7 +73,7 @@ const HistoryPanel = () => {
             if (success) {
                 setImportText('');
                 setShowImportDialog(false);
-                setIsOpen(false);
+                if (onClose) onClose();
             } else {
                 alert('Failed to import diagram. Please check the file format.');
             }
@@ -100,17 +99,7 @@ const HistoryPanel = () => {
 
     // button to open history panel
     if (!isOpen) {
-        return (
-            <div className="fixed bottom-4 right-4 z-40">
-                <button
-                    onClick={() => setIsOpen(true)}
-                    className="bg-primary text-primary-foreground p-3 rounded-full shadow-lg hover:bg-primary/90 transition-colors"
-                    title="History & Versions"
-                >
-                    <History className="w-5 h-5" />
-                </button>
-            </div>
-        );
+        return null;
     }
 
     return (
@@ -123,7 +112,7 @@ const HistoryPanel = () => {
                         <h2 className="text-lg font-semibold">History & Version Management</h2>
                     </div>
                     <button
-                        onClick={() => setIsOpen(false)}
+                        onClick={onClose || (() => {})}
                         className="text-muted-foreground hover:text-foreground p-1 rounded"
                     >
                         <RotateCcw className="w-4 h-4" />
