@@ -1,0 +1,5 @@
+ERROR: (364, 16) "NOT" is not valid at this position, expecting '('
+ERROR: (437, 15) "," is not valid at this position, expecting '('
+ERROR: (437, 13) "," is not valid at this position, expecting '('
+ERROR: (466, 16) "NOT" is not valid at this position, expecting '('
+ERROR: (479, 16) "NOT" is not valid at this position, expecting '('

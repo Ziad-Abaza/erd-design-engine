@@ -24,146 +24,193 @@ export function parseSqlToTables(sql: string): TableNodeData[] {
     return result.tables;
 }
 
-function extractForeignKeysFromAlterTable(sql: string): Array<{
-    tableName: string;
-    columnName: string;
-    referencedTable: string;
-    referencedColumn: string;
-    onDelete?: string;
-    onUpdate?: string;
-}> {
-    const foreignKeys: Array<{
+function splitByCommaOutsideParens(str: string): string[] {
+    const result: string[] = [];
+    let current = '';
+    let depth = 0;
+    for (let i = 0; i < str.length; i++) {
+        const char = str[i];
+        if (char === '(') depth++;
+        else if (char === ')') depth--;
+
+        if (char === ',' && depth === 0) {
+            result.push(current);
+            current = '';
+        } else {
+            current += char;
+        }
+    }
+    result.push(current.trim());
+    return result.filter(s => s !== '');
+}
+
+interface AlterTableConstraints {
+    foreignKeys: Array<{
         tableName: string;
         columnName: string;
         referencedTable: string;
         referencedColumn: string;
         onDelete?: string;
         onUpdate?: string;
-    }> = [];
+    }>;
+    primaryKeys: Array<{
+        tableName: string;
+        columnNames: string[];
+    }>;
+    uniqueKeys: Array<{
+        tableName: string;
+        columnNames: string[];
+    }>;
+    autoIncrements: Array<{
+        tableName: string;
+        columnName: string;
+    }>;
+}
 
-    // Find all ALTER TABLE statements with FOREIGN KEY constraints
-    const alterTableRegex = /ALTER\s+TABLE\s+`([^`]+)`\s+ADD\s+CONSTRAINT[^;]*FOREIGN\s+KEY[^;]*;/gi;
+function extractConstraintsFromAlterTable(sql: string): AlterTableConstraints {
+    const results: AlterTableConstraints = {
+        foreignKeys: [],
+        primaryKeys: [],
+        uniqueKeys: [],
+        autoIncrements: []
+    };
+
+    // Remove comments for easier matching
+    let cleaned = sql.replace(/\/\*[\s\S]*?\*\//g, '');
+    cleaned = cleaned.replace(/^--.*$/gm, '');
+    cleaned = cleaned.replace(/^#.*$/gm, '');
+
+    // Match each ALTER TABLE statement
+    const alterTableRegex = /ALTER\s+TABLE\s+`([^`]+)`\s+([\s\S]+?);/gi;
     let match;
 
-    while ((match = alterTableRegex.exec(sql)) !== null) {
-        const alterStatement = match[0];
+    while ((match = alterTableRegex.exec(cleaned)) !== null) {
         const tableName = match[1];
+        const body = match[2];
 
-        // Extract individual foreign key constraints from the ALTER statement
-        const fkRegex = /ADD\s+CONSTRAINT\s+`[^`]*`\s+FOREIGN\s+KEY\s*\(`([^`]+)`\)\s+REFERENCES\s+`([^`]+)`\s*\(`([^`]+)`\)(?:\s+ON\s+(DELETE|UPDATE)\s+(CASCADE|SET\s+NULL|RESTRICT|NO\s+ACTION))?[^,]*/gi;
-        let fkMatch;
+        // Split body by commas not inside parentheses to handle multiple ADD/MODIFY clauses
+        const segments = splitByCommaOutsideParens(body);
 
-        while ((fkMatch = fkRegex.exec(alterStatement)) !== null) {
-            const columnName = fkMatch[1];
-            const referencedTable = fkMatch[2];
-            const referencedColumn = fkMatch[3];
-            const actionType = fkMatch[4];
-            const actionValue = fkMatch[5];
+        for (let segment of segments) {
+            segment = segment.trim();
+            const upperSegment = segment.toUpperCase();
 
-            foreignKeys.push({
-                tableName,
-                columnName,
-                referencedTable,
-                referencedColumn,
-                ...(actionType && actionValue && { 
-                    [actionType.toLowerCase() === 'delete' ? 'onDelete' : 'onUpdate']: actionValue.replace(/\s+/g, ' ')
-                })
-            });
+            // 1. Primary Keys
+            if (upperSegment.startsWith('ADD PRIMARY KEY')) {
+                const pkMatch = segment.match(/ADD\s+PRIMARY\s+KEY\s*\(([^)]+)\)/i);
+                if (pkMatch) {
+                    const columnNames = pkMatch[1].split(',').map(c => c.trim().replace(/`/g, ''));
+                    results.primaryKeys.push({ tableName, columnNames });
+                }
+            }
+            // 2. Foreign Keys
+            else if (upperSegment.includes('FOREIGN KEY')) {
+                const fkRegex = /(?:ADD\s+CONSTRAINT\s+`[^`]*`\s+)?FOREIGN\s+KEY\s*\(`([^`]+)`\)\s+REFERENCES\s+`([^`]+)`\s*\(`([^`]+)`\)(?:\s+ON\s+(DELETE|UPDATE)\s+(CASCADE|SET\s+NULL|RESTRICT|NO\s+ACTION))?/gi;
+                let fkMatch;
+                while ((fkMatch = fkRegex.exec(segment)) !== null) {
+                    const columnName = fkMatch[1];
+                    const referencedTable = fkMatch[2];
+                    const referencedColumn = fkMatch[3];
+                    const actionType = fkMatch[4];
+                    const actionValue = fkMatch[5];
+
+                    results.foreignKeys.push({
+                        tableName,
+                        columnName,
+                        referencedTable,
+                        referencedColumn,
+                        ...(actionType && actionValue && {
+                            [actionType.toLowerCase() === 'delete' ? 'onDelete' : 'onUpdate']: actionValue.replace(/\s+/g, ' ')
+                        })
+                    });
+                }
+            }
+            // 3. Unique Keys
+            else if (upperSegment.startsWith('ADD UNIQUE')) {
+                const uniqueMatch = segment.match(/ADD\s+UNIQUE\s+(?:KEY|INDEX)?\s+(?:`[^`]+`\s+)?\(([^)]+)\)/i);
+                if (uniqueMatch) {
+                    const columnNames = uniqueMatch[1].split(',').map(c => c.trim().replace(/`/g, ''));
+                    results.uniqueKeys.push({ tableName, columnNames });
+                }
+            }
+            // 4. Auto Increment
+            else if (upperSegment.includes('AUTO_INCREMENT')) {
+                const aiMatch = segment.match(/MODIFY\s+`([^`]+)`/i);
+                if (aiMatch) {
+                    results.autoIncrements.push({ tableName, columnName: aiMatch[1] });
+                }
+            }
         }
     }
 
-    return foreignKeys;
+    return results;
 }
 
 function preprocessSQL(sql: string): string {
-    // Remove phpMyAdmin and MySQL-specific directives
-    let processed = sql;
-    
-    // Remove MySQL directives and comments
-    processed = processed.replace(/SET\s+SQL_MODE\s*=\s*"[^"]*";?/gi, '');
-    processed = processed.replace(/START\s+TRANSACTION;?/gi, '');
-    processed = processed.replace(/SET\s+time_zone\s*=\s*"[^"]*";?/gi, '');
-    processed = processed.replace(/\/\*\!\d+\s+SET\s+@OLD_[^=]+\s*=\s*@@[^;]+;\s*\*\//gi, '');
-    processed = processed.replace(/\/\*\!\d+\s+SET\s+NAMES[^;]+;\s*\*\//gi, '');
-    processed = processed.replace(/COMMIT;?/gi, '');
-    processed = processed.replace(/ROLLBACK;?/gi, '');
-    
-    // Remove phpMyAdmin comments
-    processed = processed.replace(/^--\s+phpMyAdmin.*$/gm, '');
-    processed = processed.replace(/^--\s+https:\/\/www\.phpmyadmin\.net\/.*$/gm, '');
-    processed = processed.replace(/^--\s+version\s+[\d.]+.*$/gm, '');
-    processed = processed.replace(/^--\s+Host:.*$/gm, '');
-    processed = processed.replace(/^--\s+Generation Time:.*$/gm, '');
-    processed = processed.replace(/^--\s+Server version:.*$/gm, '');
-    processed = processed.replace(/^--\s+PHP Version:.*$/gm, '');
-    processed = processed.replace(/^--\s+Database:.*$/gm, '');
-    processed = processed.replace(/^--\s+Table structure for table.*$/gm, '');
-    processed = processed.replace(/^--\s+Dumping data for table.*$/gm, '');
-    processed = processed.replace(/^--\s+--------------------------------------------------------.*$/gm, '');
-    processed = processed.replace(/^--\s+$/gm, '');
-    
-    // Remove ALTER TABLE statements (foreign key constraints will be handled separately)
-    processed = processed.replace(/ALTER\s+TABLE[^;]*;/gi, '');
-    processed = processed.replace(/--\s+Constraints for table.*$/gm, '');
-    processed = processed.replace(/ADD\s+CONSTRAINT[^;]*;/gi, '');
-    
-    // Remove INSERT statements (we only want CREATE TABLE)
-    processed = processed.replace(/^INSERT\s+INTO.*$/gm, '');
-    processed = processed.replace(/^LOCK\s+TABLES.*$/gm, '');
-    processed = processed.replace(/^UNLOCK\s+TABLES.*$/gm, '');
-    
-    // Remove MySQL-specific table options and complex column attributes
-    processed = processed.replace(/\)\s*ENGINE=\w+\s*(?:DEFAULT\s+CHARSET=\w+)?\s*(?:COLLATE=\w+)?\s*;/gi, ');');
-    
-    // Remove CHARACTER SET and COLLATE clauses in column definitions
-    processed = processed.replace(/CHARACTER\s+SET\s+\w+\s*COLLATE\s+\w+/gi, '');
-    processed = processed.replace(/CHARACTER\s+SET\s+\w+/gi, '');
-    processed = processed.replace(/COLLATE\s+\w+/gi, '');
-    
-    // Remove CHECK constraints with json_valid
-    processed = processed.replace(/CHECK\s*\(\s*json_valid\s*\([^)]+\)\s*\)/gi, '');
-    
-    // Remove COMMENT clauses in column definitions
-    processed = processed.replace(/COMMENT\s+'[^']*'/gi, '');
-    processed = processed.replace(/COMMENT\s+"[^"]*"/gi, '');
-    
-    // Convert current_timestamp() to CURRENT_TIMESTAMP
-    processed = processed.replace(/current_timestamp\(\)/gi, 'CURRENT_TIMESTAMP');
-    
-    // Convert backtick-quoted identifiers to unquoted identifiers (more compatible)
-    processed = processed.replace(/`([^`]+)`/g, '$1');
-    
-    // Convert quoted identifiers to unquoted for better compatibility
-    processed = processed.replace(/"([^"]+)"/g, '$1');
-    
-    // Convert MySQL data types to standard types
-    processed = processed.replace(/\bchar\(\d+\)/gi, 'VARCHAR');
-    processed = processed.replace(/\bvarchar\(\d+\)/gi, 'VARCHAR');
-    processed = processed.replace(/\btext\b/gi, 'TEXT');
-    processed = processed.replace(/\blongtext\b/gi, 'TEXT');
-    processed = processed.replace(/\bmediumtext\b/gi, 'TEXT');
-    processed = processed.replace(/\btinytext\b/gi, 'TEXT');
-    processed = processed.replace(/\btinyint\(\d+\)/gi, 'INTEGER');
-    processed = processed.replace(/\bint\(\d+\)/gi, 'INTEGER');
-    processed = processed.replace(/\bbigint\(\d+\)/gi, 'INTEGER');
-    processed = processed.replace(/\bdecimal\(\d+,\d+\)/gi, 'DECIMAL');
-    processed = processed.replace(/\bfloat\(\d+,\d+\)/gi, 'FLOAT');
-    processed = processed.replace(/\bdouble\(\d+,\d+\)/gi, 'DOUBLE');
-    processed = processed.replace(/\bdatetime\b/gi, 'TIMESTAMP');
-    processed = processed.replace(/\bdate\b/gi, 'DATE');
-    processed = processed.replace(/\btime\b/gi, 'TIME');
-    processed = processed.replace(/\btinyint\(1\)\b/gi, 'BOOLEAN');
-    processed = processed.replace(/\benum\([^)]+\)/gi, 'VARCHAR');
-    
-    // Add line breaks between CREATE TABLE statements for better parsing
-    processed = processed.replace(/\);\s*CREATE\s+TABLE/gi, ');\n\nCREATE TABLE');
-    
-    // Clean up extra whitespace and empty lines
-    processed = processed.replace(/\n\s*\n\s*\n/g, '\n\n');
-    processed = processed.replace(/\s+/g, ' ');
-    processed = processed.trim();
-    
-    return processed;
+    // 1. Remove all comments first
+    // Multiline and MySQL executable comments /*! ... */
+    let cleaned = sql.replace(/\/\*[\s\S]*?\*\//g, '');
+    // Standard single line comments
+    cleaned = cleaned.replace(/^--.*$/gm, '');
+    cleaned = cleaned.replace(/^#.*$/gm, '');
+    // Inline comments with space before
+    cleaned = cleaned.replace(/[ \t]--.*$/gm, '');
+
+    // 2. Split into individual statements by semicolon
+    const statements = cleaned.split(';');
+    const output: string[] = [];
+
+    for (let rawStmt of statements) {
+        let stmt = rawStmt.trim();
+        if (!stmt) continue;
+
+        const upper = stmt.toUpperCase();
+
+        // Skip non-essential MySQL directives
+        if (upper.startsWith('SET ') ||
+            upper.startsWith('START TRANSACTION') ||
+            upper.startsWith('COMMIT') ||
+            upper.startsWith('ROLLBACK') ||
+            upper.startsWith('LOCK TABLES') ||
+            upper.startsWith('UNLOCK TABLES') ||
+            upper.startsWith('INSERT INTO') ||
+            upper.startsWith('REPLACE INTO')) {
+            continue;
+        }
+
+        if (upper.startsWith('CREATE TABLE')) {
+            // Remove MySQL table options after the last closing parenthesis (ENGINE, CHARSET, etc.)
+            const lastParenIndex = stmt.lastIndexOf(')');
+            if (lastParenIndex !== -1) {
+                stmt = stmt.substring(0, lastParenIndex + 1);
+            }
+
+            // Remove MySQL-specific column noise
+            stmt = stmt.replace(/CHARACTER\s+SET\s+\w+/gi, '');
+            stmt = stmt.replace(/COLLATE\s+\w+/gi, '');
+            stmt = stmt.replace(/COMMENT\s+'[^']*'/gi, '');
+            stmt = stmt.replace(/COMMENT\s+"[^"]*"/gi, '');
+            stmt = stmt.replace(/\bUNSIGNED\b/gi, '');
+            stmt = stmt.replace(/\bZEROFILL\b/gi, '');
+            // Improved regex to handle nested parentheses in GENERATED ALWAYS AS clauses
+            // This handles up to 2 levels of nesting, which covers common SQL expressions
+            stmt = stmt.replace(/GENERATED\s+ALWAYS\s+AS\s*\((?:[^()]+|\((?:[^()]+|\([^()]*\))*\))*\)\s*(?:STORED|VIRTUAL)?/gi, '');
+
+            // Fix function calls that might not be supported
+            stmt = stmt.replace(/current_timestamp\(\)/gi, 'CURRENT_TIMESTAMP');
+
+            // Keep backticks for MySQL dialect support, or unquote for others
+            // Let's keep them for now as the parser handles MySQL dialect
+            output.push(stmt + ';');
+        } else if (upper.startsWith('ALTER TABLE')) {
+            // Skip ALTER TABLE statements for the CST parser as we handle them separately via regex.
+            // This prevents syntax errors from non-standard or MySQL-specific ALTER syntax.
+            continue;
+        }
+    }
+
+    // Join back with spacing
+    return output.join('\n\n');
 }
 
 export function parseSQLFile(sql: string): SQLParseResult {
@@ -174,17 +221,17 @@ export function parseSQLFile(sql: string): SQLParseResult {
         warnings: []
     };
 
-    // Extract foreign keys from ALTER TABLE statements first
-    const alterTableForeignKeys = extractForeignKeysFromAlterTable(sql);
-    result.foreignKeyConstraints.push(...alterTableForeignKeys);
+    // Extract constraints from ALTER TABLE statements first using regex
+    const alterTableConstraints = extractConstraintsFromAlterTable(sql);
+    result.foreignKeyConstraints.push(...alterTableConstraints.foreignKeys);
 
     // Preprocess the SQL to handle various file formats
     const processedSQL = preprocessSQL(sql);
-    
+
     // Try different SQL dialects
     let cst;
     const dialects = ['postgresql', 'mysql', 'sqlite'] as const;
-    
+
     for (const dialect of dialects) {
         try {
             cst = parse(processedSQL, { dialect });
@@ -194,7 +241,7 @@ export function parseSQLFile(sql: string): SQLParseResult {
                 // Last dialect failed, record the error and try to provide helpful feedback
                 const errorMessage = e instanceof Error ? e.message : 'Unknown error';
                 result.errors.push(`SQL Parse Error: ${errorMessage}`);
-                
+
                 // Add helpful suggestions based on common errors
                 if (errorMessage.includes('ENGINE')) {
                     result.errors.push('Tip: Remove MySQL-specific ENGINE= clauses for better compatibility');
@@ -210,7 +257,7 @@ export function parseSQLFile(sql: string): SQLParseResult {
                     result.errors.push('Tip: Ensure your SQL file contains valid CREATE TABLE statements');
                     result.errors.push('Tip: Try removing MySQL-specific directives and comments');
                 }
-                
+
                 return result;
             }
         }
@@ -237,8 +284,49 @@ export function parseSQLFile(sql: string): SQLParseResult {
         }
     }
 
+    // Apply primary keys from ALTER TABLE statements
+    for (const pk of alterTableConstraints.primaryKeys) {
+        const table = result.tables.find(t => t.label === pk.tableName);
+        if (table) {
+            // Reset any implicitly detected primary keys first
+            table.columns.forEach(c => c.isPrimaryKey = false);
+
+            pk.columnNames.forEach(colName => {
+                const column = table.columns.find(c => c.name === colName);
+                if (column) {
+                    column.isPrimaryKey = true;
+                    column.isNullable = false;
+                }
+            });
+        }
+    }
+
+    // Apply unique constraints from ALTER TABLE statements
+    for (const uk of alterTableConstraints.uniqueKeys) {
+        const table = result.tables.find(t => t.label === uk.tableName);
+        if (table) {
+            uk.columnNames.forEach(colName => {
+                const column = table.columns.find(c => c.name === colName);
+                if (column) {
+                    column.isUnique = true;
+                }
+            });
+        }
+    }
+
+    // Apply auto-increment from ALTER TABLE statements
+    for (const ai of alterTableConstraints.autoIncrements) {
+        const table = result.tables.find(t => t.label === ai.tableName);
+        if (table) {
+            const column = table.columns.find(c => c.name === ai.columnName);
+            if (column) {
+                column.autoIncrement = true;
+            }
+        }
+    }
+
     // Apply foreign keys from ALTER TABLE statements to the parsed tables
-    for (const fk of alterTableForeignKeys) {
+    for (const fk of alterTableConstraints.foreignKeys) {
         const table = result.tables.find(t => t.label === fk.tableName);
         if (table) {
             const column = table.columns.find(c => c.name === fk.columnName);
@@ -266,9 +354,9 @@ function detectImplicitPrimaryKey(tableName: string, columns: Column[]): Column 
         /.*_has_/,  // contains "_has_" (like user_has_roles)
         /.*_to_/,   // contains "_to_" (like user_to_role)
     ];
-    
+
     const isJunctionTable = junctionTablePatterns.some(pattern => pattern.test(tableName.toLowerCase()));
-    
+
     if (isJunctionTable && columns.length >= 2) {
         // For junction tables, look for foreign key columns that could form a composite key
         const fkColumns = columns.filter(col => col.isForeignKey);
@@ -290,7 +378,7 @@ function detectImplicitPrimaryKey(tableName: string, columns: Column[]): Column 
 
     // First, try exact matches
     for (const pattern of pkPatterns) {
-        const candidate = columns.find(col => 
+        const candidate = columns.find(col =>
             col.name.toLowerCase() === pattern.toLowerCase()
         );
         if (candidate) {
@@ -300,7 +388,7 @@ function detectImplicitPrimaryKey(tableName: string, columns: Column[]): Column 
 
     // Try partial matches (for cases like user_id in users table)
     for (const pattern of pkPatterns) {
-        const candidate = columns.find(col => 
+        const candidate = columns.find(col =>
             col.name.toLowerCase().includes(pattern.toLowerCase())
         );
         if (candidate) {
@@ -356,7 +444,7 @@ function parseCreateTableStatement(stmt: any): {
                     columns.push(columnResult.column);
                     warnings.push(...columnResult.warnings);
                 }
-                
+
                 if (columnResult.foreignKey) {
                     foreignKeys.push({
                         tableName,
@@ -375,7 +463,7 @@ function parseCreateTableStatement(stmt: any): {
                 const constraintResult = parseTableConstraint(constraint, tableName);
                 foreignKeys.push(...constraintResult.foreignKeys);
                 warnings.push(...constraintResult.warnings);
-                
+
                 // Handle multi-column primary keys
                 if (constraintResult.primaryKeyColumns && constraintResult.primaryKeyColumns.length > 0) {
                     hasExplicitPrimaryKey = true;
@@ -389,7 +477,7 @@ function parseCreateTableStatement(stmt: any): {
                         }
                     });
                 }
-                
+
                 // Handle unique constraints
                 if (constraintResult.uniqueColumns && constraintResult.uniqueColumns.length > 0) {
                     constraintResult.uniqueColumns.forEach(colName => {
@@ -398,7 +486,7 @@ function parseCreateTableStatement(stmt: any): {
                             column.isUnique = true;
                         }
                     });
-                    
+
                     // Create index for unique constraint
                     if (constraintResult.constraintName) {
                         indexes.push({
@@ -472,7 +560,7 @@ function parseColumnDefinition(item: any): {
     warnings: string[];
 } {
     const warnings: string[] = [];
-    
+
     const colName = item.name?.name;
     if (!colName) {
         warnings.push('Column name not found');
@@ -480,7 +568,7 @@ function parseColumnDefinition(item: any): {
     }
 
     const dataType = getDataTypeString(item.dataType);
-    
+
     let isPrimaryKey = false;
     let isNullable = true;
     let isUnique = false;
@@ -529,7 +617,7 @@ function parseColumnDefinition(item: any): {
                             column: {
                                 id: generateId(),
                                 name: colName,
-                                type: dataType,
+                                type: processColumnType(colName, dataType),
                                 isPrimaryKey,
                                 isForeignKey,
                                 isNullable,
@@ -560,7 +648,7 @@ function parseColumnDefinition(item: any): {
         column: {
             id: generateId(),
             name: colName,
-            type: dataType,
+            type: processColumnType(colName, dataType),
             isPrimaryKey,
             isForeignKey,
             isNullable,
@@ -606,14 +694,14 @@ function parseTableConstraint(constraint: any, tableName: string): {
     }
 
     const constraintType = constraint.constraint_type;
-    
+
     switch (constraintType?.type) {
         case "constraint_foreign_key":
             const fkConstraint = constraintType;
             const sourceColumns = fkConstraint.columns?.expr?.items?.map((item: any) => item.name) || [];
             const refTable = fkConstraint.reference?.table?.name;
             const refColumns = fkConstraint.reference?.columns?.expr?.items?.map((item: any) => item.name) || [];
-            
+
             sourceColumns.forEach((sourceCol: string, index: number) => {
                 const refCol = refColumns[index] || 'id';
                 foreignKeys.push({
@@ -626,15 +714,15 @@ function parseTableConstraint(constraint: any, tableName: string): {
                 });
             });
             break;
-            
+
         case "constraint_primary_key":
             primaryKeyColumns = constraintType.columns?.expr?.items?.map((item: any) => item.name) || [];
             break;
-            
+
         case "constraint_unique":
             uniqueColumns = constraintType.columns?.expr?.items?.map((item: any) => item.name) || [];
             break;
-            
+
         default:
             warnings.push(`Unsupported constraint type: ${constraintType?.type}`);
     }
@@ -644,25 +732,266 @@ function parseTableConstraint(constraint: any, tableName: string): {
 
 function getDataTypeString(dataTypeNode: any): string {
     if (!dataTypeNode) return "unknown";
-    
+
     switch (dataTypeNode.type) {
         case "data_type_name":
-            return dataTypeNode.name?.text || "unknown";
+            const typeName = dataTypeNode.name?.text?.toUpperCase() || "unknown";
+            return normalizeDataTypeName(typeName);
+
         case "modified_data_type":
-            const base = getDataTypeString(dataTypeNode.dataType);
+            const baseType = getDataTypeString(dataTypeNode.dataType);
             if (dataTypeNode.modifiers?.expr?.items) {
-                const params = dataTypeNode.modifiers.expr.items.map((i: any) => i.text || i.value).join(",");
-                return `${base}(${params})`;
+                const params = dataTypeNode.modifiers.expr.items.map((i: any) => {
+                    if (i.text) return i.text;
+                    if (i.value !== undefined) return i.value;
+                    if (typeof i === 'string') return i;
+                    return '';
+                }).filter((s: string) => s !== '').join(",");
+                return `${baseType}(${params})`;
             }
-            return base;
+            return baseType;
         default:
             return "unknown";
     }
 }
 
+// Enhanced data type normalization with smart ID detection
+function normalizeDataTypeName(typeName: string): string {
+    const upperType = typeName.toUpperCase().trim();
+
+    // String / Character Data Types
+    const stringTypes = {
+        'CHAR': 'CHAR',
+        'VARCHAR': 'VARCHAR',
+        'TEXT': 'TEXT',
+        'TINYTEXT': 'TINYTEXT',
+        'MEDIUMTEXT': 'MEDIUMTEXT',
+        'LONGTEXT': 'LONGTEXT',
+        'NCHAR': 'NCHAR',
+        'NVARCHAR': 'NVARCHAR',
+        'JSON': 'JSON'
+    };
+
+    // Numeric Data Types
+    const numericTypes = {
+        'TINYINT': 'TINYINT',
+        'SMALLINT': 'SMALLINT',
+        'MEDIUMINT': 'MEDIUMINT',
+        'INT': 'INT',
+        'INTEGER': 'INT',
+        'BIGINT': 'BIGINT',
+        'DECIMAL': 'DECIMAL',
+        'NUMERIC': 'NUMERIC',
+        'FLOAT': 'FLOAT',
+        'DOUBLE': 'DOUBLE',
+        'REAL': 'DOUBLE',
+        'BIT': 'BIT',
+        'BOOLEAN': 'BOOLEAN',
+        'BOOL': 'BOOLEAN',
+        'SERIAL': 'BIGINT'
+    };
+
+    // Date & Time Data Types
+    const dateTypes = {
+        'DATE': 'DATE',
+        'TIME': 'TIME',
+        'DATETIME': 'DATETIME',
+        'TIMESTAMP': 'TIMESTAMP',
+        'YEAR': 'YEAR'
+    };
+
+    // Binary / Large Object Types
+    const binaryTypes = {
+        'BINARY': 'BINARY',
+        'VARBINARY': 'VARBINARY',
+        'TINYBLOB': 'TINYBLOB',
+        'BLOB': 'BLOB',
+        'MEDIUMBLOB': 'MEDIUMBLOB',
+        'LONGBLOB': 'LONGBLOB'
+    };
+
+    // Special Types
+    const specialTypes = {
+        'ENUM': 'ENUM',
+        'SET': 'SET',
+        'GEOMETRY': 'GEOMETRY',
+        'POINT': 'POINT',
+        'LINESTRING': 'LINESTRING',
+        'POLYGON': 'POLYGON',
+        'MULTIPOINT': 'MULTIPOINT',
+        'MULTILINESTRING': 'MULTILINESTRING',
+        'MULTIPOLYGON': 'MULTIPOLYGON',
+        'GEOMETRYCOLLECTION': 'GEOMETRYCOLLECTION',
+        'UUID': 'UUID', // Add UUID support
+        'INET': 'VARCHAR',
+        'XML': 'TEXT'
+    };
+
+    // Check all type categories
+    const allTypes: { [key: string]: string } = { ...stringTypes, ...numericTypes, ...dateTypes, ...binaryTypes, ...specialTypes };
+
+    if (allTypes[upperType]) {
+        return allTypes[upperType];
+    }
+
+    // Fallback for unrecognized types
+    return upperType.toLowerCase();
+}
+
+// Enhanced column processing with smart ID detection
+function processColumnType(columnName: string, dataType: string): string {
+    const upperColumnName = columnName.toUpperCase();
+    const upperDataType = dataType.toUpperCase();
+
+    // First, handle UNSIGNED types by removing the keyword and processing the base type
+    let cleanDataType = upperDataType.replace(/\s+UNSIGNED/g, '');
+
+    // Smart ID detection: Convert CHAR(36) or specific string patterns to proper UUID type
+    if (cleanDataType === 'CHAR(36)' || cleanDataType === 'UUID') {
+        return 'UUID';
+    }
+
+    // Check if it's a UUID pattern in a string field
+    if (cleanDataType.startsWith('VARCHAR') || cleanDataType.startsWith('CHAR')) {
+        if (upperColumnName.endsWith('_UUID') || (upperColumnName === 'ID' && cleanDataType === 'CHAR(36)')) {
+            return 'UUID';
+        }
+    }
+
+    // Handle ENUM types properly - preserve values
+    if (cleanDataType.startsWith('ENUM')) {
+        return cleanDataType;
+    }
+
+    // Handle date and time types properly
+    if (cleanDataType.includes('TIMESTAMP')) {
+        return 'TIMESTAMP';
+    }
+    if (cleanDataType.includes('DATETIME')) {
+        return 'DATETIME';
+    }
+    if (cleanDataType === 'DATE') {
+        return 'DATE';
+    }
+    if (cleanDataType === 'TIME') {
+        return 'TIME';
+    }
+    if (cleanDataType === 'YEAR') {
+        return 'YEAR';
+    }
+
+    // Handle text types
+    if (cleanDataType.includes('TEXT')) {
+        if (cleanDataType.includes('LONG')) return 'LONGTEXT';
+        if (cleanDataType.includes('MEDIUM')) return 'MEDIUMTEXT';
+        if (cleanDataType.includes('TINY')) return 'TINYTEXT';
+        return 'TEXT';
+    }
+
+    // Handle JSON type
+    if (cleanDataType === 'JSON') {
+        return 'JSON';
+    }
+
+    // Handle numeric types
+    if (cleanDataType.startsWith('BIGINT')) {
+        return cleanDataType;
+    }
+    if (cleanDataType.startsWith('INT')) {
+        return cleanDataType;
+    }
+    if (cleanDataType.startsWith('TINYINT')) {
+        // Only convert tinyint(1) to BOOLEAN if it looks like a flag field
+        if (cleanDataType.startsWith('TINYINT(1)') && (
+            upperColumnName.startsWith('IS_') ||
+            upperColumnName.startsWith('HAS_') ||
+            upperColumnName.startsWith('CAN_') ||
+            upperColumnName.includes('ACTIVE') ||
+            upperColumnName.includes('ENABLED') ||
+            upperColumnName.includes('PUBLISHED') ||
+            upperColumnName.includes('COMPLETED')
+        )) {
+            return 'BOOLEAN';
+        }
+        return cleanDataType;
+    }
+    if (cleanDataType.startsWith('SMALLINT')) {
+        return cleanDataType;
+    }
+    if (cleanDataType.startsWith('MEDIUMINT')) {
+        return cleanDataType;
+    }
+    if (cleanDataType.startsWith('DECIMAL')) {
+        return cleanDataType;
+    }
+    if (cleanDataType.startsWith('DOUBLE')) {
+        return cleanDataType;
+    }
+    if (cleanDataType.startsWith('FLOAT')) {
+        return cleanDataType;
+    }
+    if (cleanDataType.startsWith('BIT')) {
+        return cleanDataType;
+    }
+
+    // Handle string types
+    if (cleanDataType.startsWith('VARCHAR')) {
+        return cleanDataType;
+    }
+    if (cleanDataType.startsWith('CHAR')) {
+        return cleanDataType;
+    }
+    if (cleanDataType.startsWith('NCHAR')) {
+        return cleanDataType;
+    }
+    if (cleanDataType.startsWith('NVARCHAR')) {
+        return cleanDataType;
+    }
+
+    // Handle binary types
+    if (cleanDataType.startsWith('BINARY') || cleanDataType.startsWith('BINARY(')) {
+        return 'BINARY';
+    }
+    if (cleanDataType.startsWith('VARBINARY') || cleanDataType.startsWith('VARBINARY(')) {
+        return 'VARBINARY';
+    }
+    if (cleanDataType.startsWith('TINYBLOB')) {
+        return 'TINYBLOB';
+    }
+    if (cleanDataType.startsWith('BLOB')) {
+        return 'BLOB';
+    }
+    if (cleanDataType.startsWith('MEDIUMBLOB')) {
+        return 'MEDIUMBLOB';
+    }
+    if (cleanDataType.startsWith('LONGBLOB')) {
+        return 'LONGBLOB';
+    }
+
+    // Handle special types
+    if (cleanDataType === 'BOOLEAN' || cleanDataType === 'BOOL') {
+        return 'BOOLEAN';
+    }
+    if (cleanDataType === 'SERIAL') {
+        return 'BIGINT';
+    }
+    if (cleanDataType === 'UUID') {
+        return 'UUID';
+    }
+    if (cleanDataType === 'INET') {
+        return 'VARCHAR';
+    }
+    if (cleanDataType === 'XML') {
+        return 'TEXT';
+    }
+
+    // Return the cleaned data type if no specific handling matched
+    return cleanDataType;
+}
+
 function getDefaultValue(valueNode: any): string | undefined {
     if (!valueNode) return undefined;
-    
+
     switch (valueNode.type) {
         case "literal_null":
             return "NULL";
@@ -682,7 +1011,7 @@ function getDefaultValue(valueNode: any): string | undefined {
 
 function mapEngineType(engineStr?: string): 'InnoDB' | 'MyISAM' | 'MEMORY' | 'ARCHIVE' | 'CSV' {
     if (!engineStr) return 'InnoDB';
-    
+
     const engine = engineStr.toUpperCase();
     switch (engine) {
         case 'INNODB':

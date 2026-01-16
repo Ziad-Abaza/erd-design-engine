@@ -52,6 +52,7 @@ type DiagramStore = DiagramData & {
     onConnect: OnConnect;
     setNodes: (nodes: Node[]) => void;
     setEdges: (edges: Edge[]) => void;
+    clearDiagram: () => void;
     detectRelationships: () => void;
     autoLayout: (options?: { direction?: 'TB' | 'LR' | 'BT' | 'RL'; type?: 'hierarchical' | 'force' | 'group' }) => void;
     validateDiagram: () => { isValid: boolean; errors: string[]; warnings: string[] };
@@ -217,6 +218,20 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
     },
     setNodes: (nodes) => set({ nodes }),
     setEdges: (edges) => set({ edges }),
+    clearDiagram: () => {
+        set({ 
+            nodes: [], 
+            edges: [], 
+            selectedNodes: [],
+            history: {
+                past: [],
+                present: { nodes: [], edges: [], selectedNodes: [] },
+                future: []
+            },
+            snapshots: [],
+            validationResult: null
+        });
+    },
     detectRelationships: () => {
         const { nodes, setEdges } = get();
         const relationships = RelationshipDetector.detectRelationships(nodes);

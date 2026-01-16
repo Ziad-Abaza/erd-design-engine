@@ -53,12 +53,12 @@ const TableNode = ({ data, selected, id }: NodeProps<TableNodeData>) => {
         position: { x: number; y: number };
         data?: any;
     } | null>(null);
-    
-    const { 
-        renameTable, 
-        renameColumn, 
-        deleteColumn, 
-        addColumn, 
+
+    const {
+        renameTable,
+        renameColumn,
+        deleteColumn,
+        addColumn,
         duplicateColumn,
         deleteTable,
         createForeignKey,
@@ -69,12 +69,12 @@ const TableNode = ({ data, selected, id }: NodeProps<TableNodeData>) => {
     const validationIssues = getValidationIssues().filter(issue => issue.tableId === id);
     const tableErrors = validationIssues.filter(issue => issue.type === 'error');
     const tableWarnings = validationIssues.filter(issue => issue.type === 'warning');
-    
+
     // Get validation issues for specific columns
     const getColumnValidationIssues = (columnId: string) => {
         return validationIssues.filter(issue => issue.columnId === columnId);
     };
-    
+
     const getValidationIndicator = () => {
         if (tableErrors.length > 0) {
             return <XCircle className="w-4 h-4 text-red-500" />;
@@ -162,25 +162,25 @@ const TableNode = ({ data, selected, id }: NodeProps<TableNodeData>) => {
 
     const handleDrop = useCallback((e: React.DragEvent, targetColumnId: string) => {
         e.preventDefault();
-        
+
         try {
             const dragData = JSON.parse(e.dataTransfer.getData('text/plain'));
             const { sourceTableId, columnId, columnName } = dragData;
-            
+
             // Don't allow creating FK to the same table
             if (sourceTableId === id) {
                 return;
             }
-            
+
             // Create foreign key relationship
             createForeignKey(sourceTableId, columnId, id, targetColumnId);
-            
+
             // Show success feedback (could be enhanced with toast)
             console.log(`Created FK: ${columnName} -> ${data.columns.find(c => c.id === targetColumnId)?.name}`);
         } catch (error) {
             console.error('Failed to create foreign key:', error);
         }
-        
+
         setDraggedColumn(null);
     }, [id, data.columns, createForeignKey]);
 
@@ -222,7 +222,7 @@ const TableNode = ({ data, selected, id }: NodeProps<TableNodeData>) => {
 
     return (
         <>
-            <div 
+            <div
                 className={cn(
                     "bg-card border rounded-md shadow-sm min-w-[200px] transition-all",
                     selected ? "border-primary ring-1 ring-primary shadow-lg scale-[1.01]" : "border-border",
@@ -263,13 +263,13 @@ const TableNode = ({ data, selected, id }: NodeProps<TableNodeData>) => {
                                 )}
                             </div>
                             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button 
+                                <button
                                     onClick={() => setEditingTable(true)}
                                     className="text-muted-foreground hover:text-foreground p-0.5"
                                 >
                                     <Edit3 className="w-3 h-3" />
                                 </button>
-                                <button 
+                                <button
                                     onClick={handleDeleteTable}
                                     className="text-muted-foreground hover:text-red-600 p-0.5"
                                 >
@@ -302,7 +302,7 @@ const TableNode = ({ data, selected, id }: NodeProps<TableNodeData>) => {
                                     </button>
                                 </div>
                             ) : (
-                                <div 
+                                <div
                                     className={cn(
                                         "flex items-center justify-between text-xs gap-2 p-1 rounded transition-colors cursor-default",
                                         col.isPrimaryKey ? "hover:bg-yellow-50 dark:hover:bg-yellow-900/20" : "hover:bg-muted",
@@ -340,19 +340,19 @@ const TableNode = ({ data, selected, id }: NodeProps<TableNodeData>) => {
                                         <span className="text-[10px] uppercase opacity-70">{col.type}</span>
                                         {col.isNullable && <span className="text-[9px] border border-border px-0.5 rounded text-muted-foreground/70">NULL</span>}
                                         <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button 
+                                            <button
                                                 onClick={() => setEditingColumn(col.id)}
                                                 className="text-muted-foreground hover:text-foreground p-0.5"
                                             >
                                                 <Edit3 className="w-3 h-3" />
                                             </button>
-                                            <button 
+                                            <button
                                                 onClick={() => handleDuplicateColumn(col.id)}
                                                 className="text-muted-foreground hover:text-foreground p-0.5"
                                             >
                                                 <Plus className="w-3 h-3" />
                                             </button>
-                                            <button 
+                                            <button
                                                 onClick={() => handleDeleteColumn(col.id)}
                                                 className="text-muted-foreground hover:text-red-600 p-0.5"
                                             >
@@ -364,7 +364,7 @@ const TableNode = ({ data, selected, id }: NodeProps<TableNodeData>) => {
                             )}
                         </div>
                     ))}
-                    
+
                     {/* Add New Column */}
                     <div className="border-t border-border pt-2 mt-2">
                         <div className="flex items-center gap-1 text-xs">
@@ -381,15 +381,31 @@ const TableNode = ({ data, selected, id }: NodeProps<TableNodeData>) => {
                                 onChange={(e) => setNewColumnType(e.target.value)}
                                 className="bg-background border rounded px-1 py-0.5 text-xs"
                             >
-                                <option value="varchar(255)">VARCHAR</option>
-                                <option value="text">TEXT</option>
-                                <option value="int">INT</option>
-                                <option value="uuid">UUID</option>
-                                <option value="timestamp">TIMESTAMP</option>
-                                <option value="boolean">BOOLEAN</option>
-                                <option value="decimal">DECIMAL</option>
+                                <optgroup label="Numeric">
+                                    <option value="int">INT</option>
+                                    <option value="bigint">BIGINT</option>
+                                    <option value="tinyint">TINYINT</option>
+                                    <option value="decimal">DECIMAL</option>
+                                    <option value="double">DOUBLE</option>
+                                </optgroup>
+                                <optgroup label="String">
+                                    <option value="varchar(255)">VARCHAR</option>
+                                    <option value="text">TEXT</option>
+                                    <option value="longtext">LONGTEXT</option>
+                                    <option value="enum">ENUM</option>
+                                </optgroup>
+                                <optgroup label="Date/Time">
+                                    <option value="timestamp">TIMESTAMP</option>
+                                    <option value="datetime">DATETIME</option>
+                                    <option value="date">DATE</option>
+                                </optgroup>
+                                <optgroup label="Other">
+                                    <option value="uuid">UUID</option>
+                                    <option value="boolean">BOOLEAN</option>
+                                    <option value="json">JSON</option>
+                                </optgroup>
                             </select>
-                            <button 
+                            <button
                                 onClick={handleAddColumn}
                                 className="text-green-600 hover:text-green-700 p-0.5"
                             >
@@ -397,13 +413,13 @@ const TableNode = ({ data, selected, id }: NodeProps<TableNodeData>) => {
                             </button>
                         </div>
                     </div>
-                    
+
                     {data.columns.length === 0 && (
                         <div className="text-[10px] text-muted-foreground text-center italic py-1">
                             No columns
                         </div>
                     )}
-                    
+
                     {/* Drag Instructions */}
                     {data.columns.length > 0 && (
                         <div className="text-[9px] text-muted-foreground text-center italic pt-1 border-t border-border/50">
@@ -433,7 +449,7 @@ const TableNode = ({ data, selected, id }: NodeProps<TableNodeData>) => {
                     onClose={closeContextMenu}
                 />
             )}
-            
+
             {contextMenu && contextMenu.type === 'column' && (
                 <ColumnContextMenu
                     tableId={contextMenu.data.tableId}

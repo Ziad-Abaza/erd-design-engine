@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Jan 15, 2026 at 10:30 PM
+-- Generation Time: Jan 16, 2026 at 04:29 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.3.26
 
@@ -18,19 +18,22 @@ SET time_zone = "+00:00";
 /*!40101 SET NAMES utf8mb4 */;
 
 --
--- Database: `laravel`
+-- Database: `egytech`
 --
 
 -- --------------------------------------------------------
 
 --
--- Table structure for table `branchables`
+-- Table structure for table `advertisements`
 --
 
-CREATE TABLE `branchables` (
-  `branch_id` char(36) NOT NULL,
-  `branchable_id` char(36) NOT NULL,
-  `branchable_type` varchar(255) NOT NULL,
+CREATE TABLE `advertisements` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `title` varchar(191) DEFAULT NULL,
+  `brief` text DEFAULT NULL,
+  `content` longtext DEFAULT NULL,
+  `redirect_to` varchar(191) DEFAULT NULL,
+  `target_screen` varchar(191) DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -38,19 +41,73 @@ CREATE TABLE `branchables` (
 -- --------------------------------------------------------
 
 --
--- Table structure for table `branches`
+-- Table structure for table `cache`
 --
 
-CREATE TABLE `branches` (
-  `branch_id` char(36) NOT NULL,
-  `name` varchar(255) NOT NULL,
-  `description` text DEFAULT NULL,
-  `address` varchar(255) DEFAULT NULL,
-  `phone` varchar(50) DEFAULT NULL,
-  `is_active` tinyint(1) NOT NULL DEFAULT 1,
-  `manager_id` char(36) DEFAULT NULL,
+CREATE TABLE `cache` (
+  `key` varchar(191) NOT NULL,
+  `value` mediumtext NOT NULL,
+  `expiration` int(11) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `cache_locks`
+--
+
+CREATE TABLE `cache_locks` (
+  `key` varchar(191) NOT NULL,
+  `owner` varchar(191) NOT NULL,
+  `expiration` int(11) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `carts`
+--
+
+CREATE TABLE `carts` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `user_id` bigint(20) UNSIGNED DEFAULT NULL,
+  `session_id` varchar(191) DEFAULT NULL,
+  `subtotal` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `discount` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `tax` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `shipping` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `total` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `coupons` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`coupons`)),
+  `shipping_method` varchar(191) DEFAULT NULL,
+  `shipping_address` varchar(191) DEFAULT NULL,
+  `billing_address` varchar(191) DEFAULT NULL,
+  `completed_at` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
-  `updated_at` timestamp NULL DEFAULT NULL
+  `updated_at` timestamp NULL DEFAULT NULL,
+  `deleted_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `cart_items`
+--
+
+CREATE TABLE `cart_items` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `cart_id` bigint(20) UNSIGNED NOT NULL,
+  `product_id` bigint(20) UNSIGNED NOT NULL,
+  `vendor_id` bigint(20) UNSIGNED NOT NULL,
+  `quantity` int(11) NOT NULL DEFAULT 1,
+  `price` decimal(10,2) NOT NULL,
+  `discount` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `tax` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `total` decimal(10,2) GENERATED ALWAYS AS ((`price` - `discount` + `tax`) * `quantity`) STORED,
+  `options` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`options`)),
+  `note` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  `deleted_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -60,8 +117,8 @@ CREATE TABLE `branches` (
 --
 
 CREATE TABLE `categories` (
-  `category_id` char(36) NOT NULL,
-  `category_name` varchar(100) NOT NULL,
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `category_name` varchar(191) NOT NULL,
   `description` text DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL
@@ -70,18 +127,161 @@ CREATE TABLE `categories` (
 -- --------------------------------------------------------
 
 --
--- Table structure for table `children_universities`
+-- Table structure for table `category_product`
 --
 
-CREATE TABLE `children_universities` (
+CREATE TABLE `category_product` (
+  `category_id` bigint(20) UNSIGNED NOT NULL,
+  `product_id` bigint(20) UNSIGNED NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `failed_jobs`
+--
+
+CREATE TABLE `failed_jobs` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `uuid` varchar(191) NOT NULL,
+  `connection` text NOT NULL,
+  `queue` text NOT NULL,
+  `payload` longtext NOT NULL,
+  `exception` longtext NOT NULL,
+  `failed_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `faqs`
+--
+
+CREATE TABLE `faqs` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `question` varchar(191) NOT NULL,
+  `answer` text NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `favorites`
+--
+
+CREATE TABLE `favorites` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `user_id` bigint(20) UNSIGNED NOT NULL,
+  `product_id` bigint(20) UNSIGNED NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `follows`
+--
+
+CREATE TABLE `follows` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `user_id` bigint(20) UNSIGNED NOT NULL,
+  `vendor_id` bigint(20) UNSIGNED NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `jobs`
+--
+
+CREATE TABLE `jobs` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `queue` varchar(191) NOT NULL,
+  `payload` longtext NOT NULL,
+  `attempts` tinyint(3) UNSIGNED NOT NULL,
+  `reserved_at` int(10) UNSIGNED DEFAULT NULL,
+  `available_at` int(10) UNSIGNED NOT NULL,
+  `created_at` int(10) UNSIGNED NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `job_batches`
+--
+
+CREATE TABLE `job_batches` (
+  `id` varchar(191) NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `total_jobs` int(11) NOT NULL,
+  `pending_jobs` int(11) NOT NULL,
+  `failed_jobs` int(11) NOT NULL,
+  `failed_job_ids` longtext NOT NULL,
+  `options` mediumtext DEFAULT NULL,
+  `cancelled_at` int(11) DEFAULT NULL,
+  `created_at` int(11) NOT NULL,
+  `finished_at` int(11) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `media`
+--
+
+CREATE TABLE `media` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `model_type` varchar(191) NOT NULL,
+  `model_id` bigint(20) UNSIGNED NOT NULL,
+  `uuid` char(36) DEFAULT NULL,
+  `collection_name` varchar(191) NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `file_name` varchar(191) NOT NULL,
+  `mime_type` varchar(191) DEFAULT NULL,
+  `disk` varchar(191) NOT NULL,
+  `conversions_disk` varchar(191) DEFAULT NULL,
+  `size` bigint(20) UNSIGNED NOT NULL,
+  `manipulations` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL CHECK (json_valid(`manipulations`)),
+  `custom_properties` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL CHECK (json_valid(`custom_properties`)),
+  `generated_conversions` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL CHECK (json_valid(`generated_conversions`)),
+  `responsive_images` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL CHECK (json_valid(`responsive_images`)),
+  `order_column` int(10) UNSIGNED DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `migrations`
+--
+
+CREATE TABLE `migrations` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `migration` varchar(191) NOT NULL,
+  `batch` int(11) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `notifications`
+--
+
+CREATE TABLE `notifications` (
   `id` char(36) NOT NULL,
-  `code` varchar(255) DEFAULT NULL,
-  `password` varchar(255) DEFAULT NULL,
-  `class_name` varchar(255) DEFAULT NULL,
-  `level_id` char(36) DEFAULT NULL,
-  `user_id` char(36) NOT NULL,
-  `meta` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`meta`)),
-  `image` varchar(255) DEFAULT NULL,
+  `type` varchar(191) NOT NULL,
+  `notifiable_type` varchar(191) NOT NULL,
+  `notifiable_id` bigint(20) UNSIGNED NOT NULL,
+  `data` text NOT NULL,
+  `read_at` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -89,16 +289,44 @@ CREATE TABLE `children_universities` (
 -- --------------------------------------------------------
 
 --
--- Table structure for table `child_level_subscriptions`
+-- Table structure for table `orders`
 --
 
-CREATE TABLE `child_level_subscriptions` (
-  `subscription_id` char(36) NOT NULL,
-  `child_id` char(36) NOT NULL,
-  `level_id` char(36) NOT NULL,
-  `subscribe_date` timestamp NULL DEFAULT NULL,
-  `expiry_date` timestamp NULL DEFAULT NULL,
-  `status` varchar(255) NOT NULL DEFAULT 'active',
+CREATE TABLE `orders` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `order_number` varchar(191) NOT NULL,
+  `user_id` bigint(20) UNSIGNED DEFAULT NULL,
+  `cart_id` bigint(20) UNSIGNED DEFAULT NULL,
+  `status_id` bigint(20) UNSIGNED NOT NULL,
+  `payment_method_id` bigint(20) UNSIGNED DEFAULT NULL,
+  `payment_status_id` bigint(20) UNSIGNED DEFAULT NULL,
+  `billing_name` varchar(191) NOT NULL,
+  `billing_email` varchar(191) NOT NULL,
+  `billing_phone` varchar(191) NOT NULL,
+  `billing_address` varchar(191) NOT NULL,
+  `billing_city` varchar(191) NOT NULL,
+  `billing_state` varchar(191) DEFAULT NULL,
+  `billing_country` varchar(191) NOT NULL,
+  `billing_postcode` varchar(191) NOT NULL,
+  `shipping_name` varchar(191) NOT NULL,
+  `shipping_email` varchar(191) NOT NULL,
+  `shipping_phone` varchar(191) NOT NULL,
+  `shipping_address` varchar(191) NOT NULL,
+  `shipping_city` varchar(191) NOT NULL,
+  `shipping_state` varchar(191) DEFAULT NULL,
+  `shipping_country` varchar(191) NOT NULL,
+  `shipping_postcode` varchar(191) NOT NULL,
+  `subtotal` decimal(10,2) NOT NULL,
+  `shipping_cost` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `tax_amount` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `discount_amount` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `total` decimal(10,2) NOT NULL,
+  `transaction_id` varchar(191) DEFAULT NULL,
+  `payment_details` text DEFAULT NULL,
+  `paid_at` timestamp NULL DEFAULT NULL,
+  `shipping_method` varchar(191) DEFAULT NULL,
+  `tracking_number` varchar(191) DEFAULT NULL,
+  `notes` text DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   `deleted_at` timestamp NULL DEFAULT NULL
@@ -107,247 +335,19 @@ CREATE TABLE `child_level_subscriptions` (
 -- --------------------------------------------------------
 
 --
--- Table structure for table `classes`
+-- Table structure for table `order_downloads`
 --
 
-CREATE TABLE `classes` (
-  `class_id` char(36) NOT NULL,
-  `class_name` varchar(255) NOT NULL,
-  `branch_id` char(36) DEFAULT NULL,
-  `level_id` char(36) DEFAULT NULL,
-  `course_id` char(36) NOT NULL,
-  `start_date` date DEFAULT NULL,
-  `end_date` date DEFAULT NULL,
-  `is_active` tinyint(1) NOT NULL DEFAULT 1,
-  `created_by` char(36) NOT NULL,
-  `created_at` timestamp NULL DEFAULT NULL,
-  `updated_at` timestamp NULL DEFAULT NULL,
-  `deleted_at` timestamp NULL DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- --------------------------------------------------------
-
---
--- Table structure for table `class_moderators`
---
-
-CREATE TABLE `class_moderators` (
-  `class_moderator_id` char(36) NOT NULL,
-  `class_id` char(36) NOT NULL,
-  `user_id` char(36) NOT NULL,
-  `role_in_class` enum('main_teacher','assistant','attendance_manager','content_manager') NOT NULL DEFAULT 'assistant',
-  `assigned_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `created_at` timestamp NULL DEFAULT NULL,
-  `updated_at` timestamp NULL DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- --------------------------------------------------------
-
---
--- Table structure for table `class_students`
---
-
-CREATE TABLE `class_students` (
-  `class_id` char(36) NOT NULL,
-  `child_id` char(36) NOT NULL,
-  `joined_at` timestamp NOT NULL DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- --------------------------------------------------------
-
---
--- Table structure for table `courses`
---
-
-CREATE TABLE `courses` (
-  `course_id` char(36) NOT NULL,
-  `title` varchar(200) NOT NULL,
-  `description` text DEFAULT NULL,
-  `instructor_id` char(36) NOT NULL,
-  `category_id` char(36) NOT NULL,
-  `created_at` timestamp NULL DEFAULT NULL,
-  `updated_at` timestamp NULL DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- --------------------------------------------------------
-
---
--- Table structure for table `course_details`
---
-
-CREATE TABLE `course_details` (
-  `detail_id` char(36) NOT NULL,
-  `objectives` text DEFAULT NULL,
-  `prerequisites` text DEFAULT NULL,
-  `content` text DEFAULT NULL,
-  `total_duration` int(11) DEFAULT NULL,
-  `language` varchar(50) NOT NULL DEFAULT 'ar',
-  `level` varchar(50) NOT NULL,
-  `status` varchar(20) NOT NULL DEFAULT 'available' COMMENT 'available, upcoming, suspended',
-  `course_id` char(36) NOT NULL,
-  `deleted_at` timestamp NULL DEFAULT NULL,
-  `created_at` timestamp NULL DEFAULT NULL,
-  `updated_at` timestamp NULL DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- --------------------------------------------------------
-
---
--- Table structure for table `course_enrollments`
---
-
-CREATE TABLE `course_enrollments` (
-  `enrollment_id` char(36) NOT NULL,
-  `course_id` char(36) NOT NULL,
-  `user_id` char(36) DEFAULT NULL,
-  `max_students` int(11) NOT NULL DEFAULT 0,
-  `current_students` int(11) NOT NULL DEFAULT 0,
-  `status` enum('pending','approved','rejected') NOT NULL DEFAULT 'pending',
-  `is_processing_enrollment` tinyint(1) NOT NULL DEFAULT 0,
-  `created_at` timestamp NULL DEFAULT NULL,
-  `updated_at` timestamp NULL DEFAULT NULL,
-  `deleted_at` timestamp NULL DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- --------------------------------------------------------
-
---
--- Table structure for table `course_level`
---
-
-CREATE TABLE `course_level` (
-  `level_id` char(36) NOT NULL,
-  `course_id` char(36) NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- --------------------------------------------------------
-
---
--- Table structure for table `course_moderators`
---
-
-CREATE TABLE `course_moderators` (
-  `course_id` char(36) NOT NULL,
-  `user_id` char(36) NOT NULL,
-  `created_at` timestamp NULL DEFAULT NULL,
-  `updated_at` timestamp NULL DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- --------------------------------------------------------
-
---
--- Table structure for table `course_pricings`
---
-
-CREATE TABLE `course_pricings` (
-  `pricing_id` char(36) NOT NULL,
-  `course_id` char(36) NOT NULL,
-  `price` decimal(10,2) NOT NULL,
-  `discount_price` decimal(10,2) DEFAULT NULL,
-  `discount_start` timestamp NULL DEFAULT NULL,
-  `discount_end` timestamp NULL DEFAULT NULL,
-  `is_free` tinyint(1) NOT NULL DEFAULT 0,
-  `created_at` timestamp NULL DEFAULT NULL,
-  `updated_at` timestamp NULL DEFAULT NULL,
-  `deleted_at` timestamp NULL DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- --------------------------------------------------------
-
---
--- Table structure for table `course_purchases`
---
-
-CREATE TABLE `course_purchases` (
-  `purchase_id` char(36) NOT NULL,
-  `user_id` char(36) NOT NULL,
-  `course_id` char(36) NOT NULL,
-  `child_id` char(36) DEFAULT NULL,
-  `amount` decimal(10,2) NOT NULL,
-  `currency` varchar(255) NOT NULL DEFAULT 'EGP',
-  `payment_status` varchar(255) NOT NULL,
-  `payment_method` varchar(255) NOT NULL,
-  `transaction_id` varchar(255) DEFAULT NULL,
-  `payment_response` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`payment_response`)),
-  `purchased_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `created_at` timestamp NULL DEFAULT NULL,
-  `updated_at` timestamp NULL DEFAULT NULL,
-  `deleted_at` timestamp NULL DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- --------------------------------------------------------
-
---
--- Table structure for table `instructor_profiles`
---
-
-CREATE TABLE `instructor_profiles` (
-  `instructor_profile_id` char(36) NOT NULL,
-  `user_id` char(36) NOT NULL,
-  `bio` text DEFAULT NULL,
-  `specialization` varchar(255) DEFAULT NULL,
-  `experience` varchar(255) DEFAULT NULL,
-  `linkedin_url` varchar(255) DEFAULT NULL,
-  `github_url` varchar(255) DEFAULT NULL,
-  `website_url` varchar(255) DEFAULT NULL,
-  `skills` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`skills`)),
-  `facebook_url` varchar(255) DEFAULT NULL,
-  `instagram_url` varchar(255) DEFAULT NULL,
-  `whatsapp` varchar(255) DEFAULT NULL,
-  `public_email` varchar(255) DEFAULT NULL,
-  `created_at` timestamp NULL DEFAULT NULL,
-  `updated_at` timestamp NULL DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- --------------------------------------------------------
-
---
--- Table structure for table `lectures`
---
-
-CREATE TABLE `lectures` (
-  `lecture_id` char(36) NOT NULL,
-  `course_id` char(36) NOT NULL,
-  `instructor_id` char(36) DEFAULT NULL,
-  `title` varchar(255) NOT NULL,
-  `description` text DEFAULT NULL,
-  `content` longtext DEFAULT NULL,
-  `lecture_type` enum('video','text','pdf','presentation','quiz','assignment','interactive','audio') NOT NULL DEFAULT 'pdf',
-  `duration` int(11) DEFAULT NULL COMMENT 'Duration in minutes',
-  `order_in_course` int(11) NOT NULL DEFAULT 0,
-  `is_published` tinyint(1) NOT NULL DEFAULT 1,
-  `is_free` tinyint(1) NOT NULL DEFAULT 1,
-  `video_url` varchar(500) DEFAULT NULL,
-  `file_path` varchar(500) DEFAULT NULL,
-  `external_url` varchar(500) DEFAULT NULL,
-  `lecture_number` int(11) NOT NULL DEFAULT 0,
-  `prerequisites` text DEFAULT NULL,
-  `learning_objectives` text DEFAULT NULL,
-  `difficulty_level` enum('beginner','intermediate','advanced') NOT NULL DEFAULT 'beginner',
-  `estimated_time` int(11) DEFAULT NULL COMMENT 'Estimated time in minutes',
-  `tags` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`tags`)),
-  `status` enum('draft','published','archived') NOT NULL DEFAULT 'draft',
-  `created_at` timestamp NULL DEFAULT NULL,
-  `updated_at` timestamp NULL DEFAULT NULL,
-  `deleted_at` timestamp NULL DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- --------------------------------------------------------
-
---
--- Table structure for table `lecture_attachments`
---
-
-CREATE TABLE `lecture_attachments` (
-  `attachment_id` char(36) NOT NULL,
-  `lecture_id` char(36) NOT NULL,
-  `title` varchar(255) NOT NULL,
-  `description` text DEFAULT NULL,
-  `file_type` varchar(50) DEFAULT NULL,
-  `file_size` bigint(20) NOT NULL DEFAULT 0,
+CREATE TABLE `order_downloads` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `order_id` bigint(20) UNSIGNED NOT NULL,
+  `order_item_id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `file` varchar(191) NOT NULL,
+  `filename` varchar(191) NOT NULL,
+  `download_limit` int(11) NOT NULL DEFAULT 0,
   `download_count` int(11) NOT NULL DEFAULT 0,
-  `is_required` tinyint(1) NOT NULL DEFAULT 0,
-  `order_index` int(11) NOT NULL DEFAULT 0,
+  `expires_at` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -355,44 +355,257 @@ CREATE TABLE `lecture_attachments` (
 -- --------------------------------------------------------
 
 --
--- Table structure for table `lecture_comments`
+-- Table structure for table `order_histories`
 --
 
-CREATE TABLE `lecture_comments` (
-  `comment_id` char(36) NOT NULL,
-  `lecture_id` char(36) NOT NULL,
-  `user_id` char(36) NOT NULL,
-  `parent_comment_id` char(36) DEFAULT NULL,
+CREATE TABLE `order_histories` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `order_id` bigint(20) UNSIGNED NOT NULL,
+  `status_id` bigint(20) UNSIGNED NOT NULL,
+  `comment` text DEFAULT NULL,
+  `notify_customer` tinyint(1) NOT NULL DEFAULT 0,
+  `created_by` bigint(20) UNSIGNED DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `order_items`
+--
+
+CREATE TABLE `order_items` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `order_id` bigint(20) UNSIGNED NOT NULL,
+  `product_id` bigint(20) UNSIGNED NOT NULL,
+  `vendor_id` bigint(20) UNSIGNED NOT NULL,
+  `product_name` varchar(191) NOT NULL,
+  `product_sku` varchar(191) DEFAULT NULL,
+  `price` decimal(10,2) NOT NULL,
+  `quantity` int(11) NOT NULL,
+  `options` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`options`)),
+  `tax_amount` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `discount_amount` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `total` decimal(10,2) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `order_notes`
+--
+
+CREATE TABLE `order_notes` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `order_id` bigint(20) UNSIGNED NOT NULL,
+  `note` text NOT NULL,
+  `created_by` bigint(20) UNSIGNED NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `order_statuses`
+--
+
+CREATE TABLE `order_statuses` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `color` varchar(191) NOT NULL DEFAULT '#6c757d',
+  `is_default` tinyint(1) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `password_reset_tokens`
+--
+
+CREATE TABLE `password_reset_tokens` (
+  `email` varchar(191) NOT NULL,
+  `token` varchar(191) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `payment_methods`
+--
+
+CREATE TABLE `payment_methods` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `code` varchar(191) NOT NULL,
+  `description` text DEFAULT NULL,
+  `is_active` tinyint(1) NOT NULL DEFAULT 1,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `payment_statuses`
+--
+
+CREATE TABLE `payment_statuses` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `color` varchar(191) NOT NULL DEFAULT '#6c757d',
+  `is_default` tinyint(1) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `personal_access_tokens`
+--
+
+CREATE TABLE `personal_access_tokens` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `tokenable_type` varchar(191) NOT NULL,
+  `tokenable_id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `token` varchar(64) NOT NULL,
+  `abilities` text DEFAULT NULL,
+  `last_used_at` timestamp NULL DEFAULT NULL,
+  `expires_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `products`
+--
+
+CREATE TABLE `products` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `vendor_id` bigint(20) UNSIGNED NOT NULL,
+  `product_name` varchar(191) NOT NULL,
+  `description` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `product_details`
+--
+
+CREATE TABLE `product_details` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `product_id` bigint(20) UNSIGNED NOT NULL,
+  `size` varchar(191) DEFAULT NULL,
+  `color` varchar(191) DEFAULT NULL,
+  `price` decimal(8,2) NOT NULL,
+  `discount` decimal(8,2) DEFAULT NULL,
+  `stock` int(11) NOT NULL DEFAULT 1,
+  `material` varchar(191) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `promotions`
+--
+
+CREATE TABLE `promotions` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `promotion_amount` decimal(8,2) DEFAULT NULL,
+  `promotion_priority` int(11) NOT NULL DEFAULT 0,
+  `duration` int(11) NOT NULL,
+  `status` enum('active','inactive') NOT NULL DEFAULT 'active',
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `regions`
+--
+
+CREATE TABLE `regions` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `region_vendor`
+--
+
+CREATE TABLE `region_vendor` (
+  `region_id` bigint(20) UNSIGNED NOT NULL,
+  `vendor_id` bigint(20) UNSIGNED NOT NULL,
+  `delivery_cost` double DEFAULT NULL,
+  `discount` int(11) DEFAULT NULL,
+  `description` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `reviews`
+--
+
+CREATE TABLE `reviews` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `user_id` bigint(20) UNSIGNED NOT NULL,
+  `product_id` bigint(20) UNSIGNED NOT NULL,
+  `rating` tinyint(3) UNSIGNED NOT NULL,
+  `comment` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `sessions`
+--
+
+CREATE TABLE `sessions` (
+  `id` varchar(191) NOT NULL,
+  `user_id` bigint(20) UNSIGNED DEFAULT NULL,
+  `ip_address` varchar(45) DEFAULT NULL,
+  `user_agent` text DEFAULT NULL,
+  `payload` longtext NOT NULL,
+  `last_activity` int(11) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `static_pages`
+--
+
+CREATE TABLE `static_pages` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `title` varchar(191) NOT NULL,
+  `slug` varchar(191) NOT NULL,
   `content` text NOT NULL,
-  `is_anonymous` tinyint(1) NOT NULL DEFAULT 0,
-  `is_instructor_comment` tinyint(1) NOT NULL DEFAULT 0,
-  `is_pinned` tinyint(1) NOT NULL DEFAULT 0,
-  `is_resolved` tinyint(1) NOT NULL DEFAULT 0,
-  `rating` int(11) DEFAULT NULL COMMENT '1-5 rating',
-  `helpful_votes` int(11) NOT NULL DEFAULT 0,
-  `reported_count` int(11) NOT NULL DEFAULT 0,
-  `created_at` timestamp NULL DEFAULT NULL,
-  `updated_at` timestamp NULL DEFAULT NULL,
-  `deleted_at` timestamp NULL DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- --------------------------------------------------------
-
---
--- Table structure for table `lecture_resources`
---
-
-CREATE TABLE `lecture_resources` (
-  `resource_id` char(36) NOT NULL,
-  `lecture_id` char(36) NOT NULL,
-  `title` varchar(255) NOT NULL,
-  `description` text DEFAULT NULL,
-  `url` varchar(500) NOT NULL,
-  `resource_type` enum('article','video','book','tool','website','document','presentation','quiz','assignment','forum','chat') NOT NULL DEFAULT 'website',
-  `is_external` tinyint(1) NOT NULL DEFAULT 1,
-  `is_required` tinyint(1) NOT NULL DEFAULT 0,
-  `order_index` int(11) NOT NULL DEFAULT 0,
-  `tags` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`tags`)),
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -400,32 +613,15 @@ CREATE TABLE `lecture_resources` (
 -- --------------------------------------------------------
 
 --
--- Table structure for table `levels`
+-- Table structure for table `support_tickets`
 --
 
-CREATE TABLE `levels` (
-  `level_id` char(36) NOT NULL,
-  `name` varchar(255) NOT NULL,
-  `description` text DEFAULT NULL,
-  `created_at` timestamp NULL DEFAULT NULL,
-  `updated_at` timestamp NULL DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- --------------------------------------------------------
-
---
--- Table structure for table `subscriptions`
---
-
-CREATE TABLE `subscriptions` (
-  `subscription_id` char(36) NOT NULL,
-  `user_id` char(36) NOT NULL,
-  `course_id` char(36) NOT NULL,
-  `start_date` timestamp NOT NULL DEFAULT current_timestamp(),
-  `end_date` timestamp NULL DEFAULT NULL,
-  `type` enum('unlimited','limited') NOT NULL,
-  `payment_method` varchar(255) DEFAULT NULL,
-  `transaction_id` varchar(255) DEFAULT NULL,
+CREATE TABLE `support_tickets` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `user_id` bigint(20) UNSIGNED NOT NULL,
+  `subject` varchar(191) NOT NULL,
+  `message` text NOT NULL,
+  `status` varchar(191) NOT NULL DEFAULT 'open',
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -437,12 +633,34 @@ CREATE TABLE `subscriptions` (
 --
 
 CREATE TABLE `users` (
-  `user_id` char(36) NOT NULL,
-  `name` varchar(255) NOT NULL,
-  `email` varchar(255) NOT NULL,
-  `email_verified_at` timestamp NULL DEFAULT NULL,
-  `password` varchar(255) NOT NULL,
-  `remember_token` varchar(255) DEFAULT NULL,
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) DEFAULT NULL,
+  `email` varchar(191) NOT NULL,
+  `password` varchar(191) NOT NULL,
+  `email_verified_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `address` varchar(191) DEFAULT NULL,
+  `phone` varchar(191) DEFAULT NULL,
+  `gender` enum('male','female','other') DEFAULT NULL,
+  `token` varchar(191) DEFAULT NULL,
+  `token_expiration` timestamp NULL DEFAULT NULL,
+  `is_active` tinyint(1) NOT NULL DEFAULT 1,
+  `role` enum('user','vendor','admin') DEFAULT 'user',
+  `remember_token` varchar(100) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  `verification_token` varchar(191) DEFAULT NULL,
+  `is_verified` tinyint(1) NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `user_vendor`
+--
+
+CREATE TABLE `user_vendor` (
+  `user_id` bigint(20) UNSIGNED NOT NULL,
+  `vendor_id` bigint(20) UNSIGNED NOT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -450,75 +668,109 @@ CREATE TABLE `users` (
 -- --------------------------------------------------------
 
 --
--- Table structure for table `user_course_progress`
+-- Table structure for table `vendors`
 --
 
-CREATE TABLE `user_course_progress` (
-  `user_course_id` char(36) NOT NULL,
-  `user_id` char(36) NOT NULL,
-  `course_id` char(36) NOT NULL,
-  `completion_percentage` double NOT NULL DEFAULT 0,
-  `last_accessed` timestamp NULL DEFAULT NULL,
-  `created_at` timestamp NULL DEFAULT NULL,
-  `updated_at` timestamp NULL DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- --------------------------------------------------------
-
---
--- Table structure for table `user_lecture_progress`
---
-
-CREATE TABLE `user_lecture_progress` (
-  `progress_id` char(36) NOT NULL,
-  `user_id` char(36) NOT NULL,
-  `lecture_id` char(36) NOT NULL,
-  `course_id` char(36) NOT NULL,
-  `is_completed` tinyint(1) NOT NULL DEFAULT 0,
-  `completion_percentage` int(11) NOT NULL DEFAULT 0,
-  `time_spent` int(11) NOT NULL DEFAULT 0 COMMENT 'Time spent in minutes',
-  `last_accessed` timestamp NULL DEFAULT NULL,
-  `completed_at` timestamp NULL DEFAULT NULL,
-  `notes` text DEFAULT NULL,
-  `rating` int(11) DEFAULT NULL COMMENT '1-5 rating',
-  `feedback` text DEFAULT NULL,
-  `is_bookmarked` tinyint(1) NOT NULL DEFAULT 0,
-  `created_at` timestamp NULL DEFAULT NULL,
-  `updated_at` timestamp NULL DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- --------------------------------------------------------
-
---
--- Table structure for table `user_video_progress`
---
-
-CREATE TABLE `user_video_progress` (
-  `progress_id` char(36) NOT NULL,
-  `user_id` char(36) NOT NULL,
-  `video_id` char(36) NOT NULL,
-  `is_completed` tinyint(1) NOT NULL DEFAULT 0,
-  `last_watched_time` timestamp NULL DEFAULT NULL,
-  `created_at` timestamp NULL DEFAULT NULL,
-  `updated_at` timestamp NULL DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- --------------------------------------------------------
-
---
--- Table structure for table `videos`
---
-
-CREATE TABLE `videos` (
-  `video_id` char(36) NOT NULL,
-  `course_id` char(36) NOT NULL,
-  `title` varchar(200) NOT NULL,
+CREATE TABLE `vendors` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `brand_name` varchar(191) NOT NULL,
+  `image` varchar(191) DEFAULT NULL,
   `description` text DEFAULT NULL,
-  `duration` int(11) DEFAULT NULL,
-  `video_url` varchar(500) DEFAULT NULL,
-  `order_in_course` int(11) DEFAULT NULL,
+  `phone` varchar(191) NOT NULL,
+  `status` enum('active','inactive','pending') NOT NULL DEFAULT 'pending',
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  `deleted_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `vendor_promotion`
+--
+
+CREATE TABLE `vendor_promotion` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `vendor_id` bigint(20) UNSIGNED NOT NULL,
+  `promotion_id` bigint(20) UNSIGNED NOT NULL,
+  `start_date` date NOT NULL,
+  `end_date` date NOT NULL,
+  `status` enum('pending','approved','rejected') NOT NULL DEFAULT 'pending',
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `wallets`
+--
+
+CREATE TABLE `wallets` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `user_id` bigint(20) UNSIGNED NOT NULL,
+  `balance` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `currency` varchar(3) NOT NULL DEFAULT 'USD',
+  `is_active` tinyint(1) NOT NULL DEFAULT 1,
+  `last_activity_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  `deleted_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `wallet_transactions`
+--
+
+CREATE TABLE `wallet_transactions` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `wallet_id` bigint(20) UNSIGNED NOT NULL,
+  `amount` decimal(15,2) NOT NULL,
+  `type` varchar(20) NOT NULL,
+  `description` varchar(191) NOT NULL,
+  `meta` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`meta`)),
+  `balance_after` decimal(15,2) NOT NULL,
+  `reference_id` bigint(20) UNSIGNED DEFAULT NULL,
+  `reference_type` varchar(191) DEFAULT NULL,
+  `referenceable_type` varchar(191) NOT NULL,
+  `referenceable_id` bigint(20) UNSIGNED NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  `deleted_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `wishlists`
+--
+
+CREATE TABLE `wishlists` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `user_id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `is_default` tinyint(1) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  `deleted_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `wishlist_items`
+--
+
+CREATE TABLE `wishlist_items` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `wishlist_id` bigint(20) UNSIGNED NOT NULL,
+  `product_id` bigint(20) UNSIGNED NOT NULL,
+  `note` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  `deleted_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
@@ -526,396 +778,682 @@ CREATE TABLE `videos` (
 --
 
 --
--- Indexes for table `branchables`
+-- Indexes for table `advertisements`
 --
-ALTER TABLE `branchables`
-  ADD KEY `branchables_branch_id_foreign` (`branch_id`);
+ALTER TABLE `advertisements`
+  ADD PRIMARY KEY (`id`);
 
 --
--- Indexes for table `branches`
+-- Indexes for table `cache`
 --
-ALTER TABLE `branches`
-  ADD PRIMARY KEY (`branch_id`),
-  ADD KEY `branches_manager_id_foreign` (`manager_id`);
+ALTER TABLE `cache`
+  ADD PRIMARY KEY (`key`);
+
+--
+-- Indexes for table `cache_locks`
+--
+ALTER TABLE `cache_locks`
+  ADD PRIMARY KEY (`key`);
+
+--
+-- Indexes for table `carts`
+--
+ALTER TABLE `carts`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `carts_user_id_session_id_index` (`user_id`,`session_id`);
+
+--
+-- Indexes for table `cart_items`
+--
+ALTER TABLE `cart_items`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `cart_items_cart_id_foreign` (`cart_id`),
+  ADD KEY `cart_items_product_id_foreign` (`product_id`),
+  ADD KEY `cart_items_vendor_id_foreign` (`vendor_id`);
 
 --
 -- Indexes for table `categories`
 --
 ALTER TABLE `categories`
-  ADD PRIMARY KEY (`category_id`);
-
---
--- Indexes for table `children_universities`
---
-ALTER TABLE `children_universities`
   ADD PRIMARY KEY (`id`),
-  ADD UNIQUE KEY `children_universities_code_unique` (`code`),
-  ADD KEY `children_universities_user_id_foreign` (`user_id`),
-  ADD KEY `children_universities_level_id_foreign` (`level_id`);
+  ADD UNIQUE KEY `categories_category_name_unique` (`category_name`);
 
 --
--- Indexes for table `child_level_subscriptions`
+-- Indexes for table `category_product`
 --
-ALTER TABLE `child_level_subscriptions`
-  ADD PRIMARY KEY (`subscription_id`),
-  ADD KEY `child_level_subscriptions_child_id_foreign` (`child_id`),
-  ADD KEY `child_level_subscriptions_level_id_foreign` (`level_id`);
+ALTER TABLE `category_product`
+  ADD PRIMARY KEY (`category_id`,`product_id`),
+  ADD KEY `category_product_product_id_foreign` (`product_id`);
 
 --
--- Indexes for table `classes`
+-- Indexes for table `failed_jobs`
 --
-ALTER TABLE `classes`
-  ADD PRIMARY KEY (`class_id`),
-  ADD KEY `classes_branch_id_foreign` (`branch_id`),
-  ADD KEY `classes_level_id_foreign` (`level_id`),
-  ADD KEY `classes_course_id_foreign` (`course_id`),
-  ADD KEY `classes_created_by_foreign` (`created_by`);
+ALTER TABLE `failed_jobs`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `failed_jobs_uuid_unique` (`uuid`);
 
 --
--- Indexes for table `class_moderators`
+-- Indexes for table `faqs`
 --
-ALTER TABLE `class_moderators`
-  ADD PRIMARY KEY (`class_moderator_id`),
-  ADD UNIQUE KEY `class_moderators_class_id_user_id_unique` (`class_id`,`user_id`),
-  ADD KEY `class_moderators_user_id_foreign` (`user_id`);
+ALTER TABLE `faqs`
+  ADD PRIMARY KEY (`id`);
 
 --
--- Indexes for table `class_students`
+-- Indexes for table `favorites`
 --
-ALTER TABLE `class_students`
-  ADD PRIMARY KEY (`class_id`,`child_id`),
-  ADD KEY `class_students_child_id_foreign` (`child_id`);
+ALTER TABLE `favorites`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `favorites_user_id_foreign` (`user_id`),
+  ADD KEY `favorites_product_id_foreign` (`product_id`);
 
 --
--- Indexes for table `courses`
+-- Indexes for table `follows`
 --
-ALTER TABLE `courses`
-  ADD PRIMARY KEY (`course_id`),
-  ADD KEY `courses_instructor_id_foreign` (`instructor_id`),
-  ADD KEY `courses_category_id_foreign` (`category_id`);
+ALTER TABLE `follows`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `follows_user_id_foreign` (`user_id`),
+  ADD KEY `follows_vendor_id_foreign` (`vendor_id`);
 
 --
--- Indexes for table `course_details`
+-- Indexes for table `jobs`
 --
-ALTER TABLE `course_details`
-  ADD PRIMARY KEY (`detail_id`),
-  ADD KEY `course_details_course_id_foreign` (`course_id`);
+ALTER TABLE `jobs`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `jobs_queue_index` (`queue`);
 
 --
--- Indexes for table `course_enrollments`
+-- Indexes for table `job_batches`
 --
-ALTER TABLE `course_enrollments`
-  ADD PRIMARY KEY (`enrollment_id`),
-  ADD KEY `course_enrollments_course_id_foreign` (`course_id`),
-  ADD KEY `course_enrollments_user_id_foreign` (`user_id`);
+ALTER TABLE `job_batches`
+  ADD PRIMARY KEY (`id`);
 
 --
--- Indexes for table `course_level`
+-- Indexes for table `media`
 --
-ALTER TABLE `course_level`
-  ADD PRIMARY KEY (`level_id`,`course_id`),
-  ADD KEY `course_level_course_id_foreign` (`course_id`);
+ALTER TABLE `media`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `media_uuid_unique` (`uuid`),
+  ADD KEY `media_model_type_model_id_index` (`model_type`,`model_id`),
+  ADD KEY `media_order_column_index` (`order_column`);
 
 --
--- Indexes for table `course_moderators`
+-- Indexes for table `migrations`
 --
-ALTER TABLE `course_moderators`
-  ADD PRIMARY KEY (`course_id`,`user_id`),
-  ADD KEY `course_moderators_user_id_foreign` (`user_id`);
+ALTER TABLE `migrations`
+  ADD PRIMARY KEY (`id`);
 
 --
--- Indexes for table `course_pricings`
+-- Indexes for table `notifications`
 --
-ALTER TABLE `course_pricings`
-  ADD PRIMARY KEY (`pricing_id`),
-  ADD KEY `course_pricings_course_id_foreign` (`course_id`);
+ALTER TABLE `notifications`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `notifications_notifiable_type_notifiable_id_index` (`notifiable_type`,`notifiable_id`);
 
 --
--- Indexes for table `course_purchases`
+-- Indexes for table `orders`
 --
-ALTER TABLE `course_purchases`
-  ADD PRIMARY KEY (`purchase_id`),
-  ADD KEY `course_purchases_user_id_foreign` (`user_id`),
-  ADD KEY `course_purchases_course_id_foreign` (`course_id`),
-  ADD KEY `course_purchases_child_id_foreign` (`child_id`);
+ALTER TABLE `orders`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `orders_order_number_unique` (`order_number`),
+  ADD KEY `orders_user_id_foreign` (`user_id`),
+  ADD KEY `orders_cart_id_foreign` (`cart_id`),
+  ADD KEY `orders_status_id_foreign` (`status_id`),
+  ADD KEY `orders_payment_method_id_foreign` (`payment_method_id`),
+  ADD KEY `orders_payment_status_id_foreign` (`payment_status_id`);
 
 --
--- Indexes for table `instructor_profiles`
+-- Indexes for table `order_downloads`
 --
-ALTER TABLE `instructor_profiles`
-  ADD PRIMARY KEY (`instructor_profile_id`),
-  ADD KEY `instructor_profiles_user_id_foreign` (`user_id`);
+ALTER TABLE `order_downloads`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `order_downloads_order_id_foreign` (`order_id`),
+  ADD KEY `order_downloads_order_item_id_foreign` (`order_item_id`);
 
 --
--- Indexes for table `lectures`
+-- Indexes for table `order_histories`
 --
-ALTER TABLE `lectures`
-  ADD PRIMARY KEY (`lecture_id`),
-  ADD KEY `lectures_instructor_id_foreign` (`instructor_id`),
-  ADD KEY `lectures_course_id_order_in_course_index` (`course_id`,`order_in_course`),
-  ADD KEY `lectures_course_id_is_published_index` (`course_id`,`is_published`),
-  ADD KEY `lectures_lecture_type_is_published_index` (`lecture_type`,`is_published`),
-  ADD KEY `lectures_status_index` (`status`),
-  ADD KEY `lectures_difficulty_level_index` (`difficulty_level`);
+ALTER TABLE `order_histories`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `order_histories_order_id_foreign` (`order_id`),
+  ADD KEY `order_histories_status_id_foreign` (`status_id`),
+  ADD KEY `order_histories_created_by_foreign` (`created_by`);
 
 --
--- Indexes for table `lecture_attachments`
+-- Indexes for table `order_items`
 --
-ALTER TABLE `lecture_attachments`
-  ADD PRIMARY KEY (`attachment_id`),
-  ADD KEY `lecture_attachments_lecture_id_order_index_index` (`lecture_id`,`order_index`),
-  ADD KEY `lecture_attachments_is_required_index` (`is_required`),
-  ADD KEY `lecture_attachments_file_type_index` (`file_type`);
+ALTER TABLE `order_items`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `order_items_order_id_foreign` (`order_id`),
+  ADD KEY `order_items_product_id_foreign` (`product_id`),
+  ADD KEY `order_items_vendor_id_foreign` (`vendor_id`);
 
 --
--- Indexes for table `lecture_comments`
+-- Indexes for table `order_notes`
 --
-ALTER TABLE `lecture_comments`
-  ADD PRIMARY KEY (`comment_id`),
-  ADD KEY `lecture_comments_user_id_foreign` (`user_id`),
-  ADD KEY `lecture_comments_parent_comment_id_foreign` (`parent_comment_id`),
-  ADD KEY `lecture_comments_lecture_id_parent_comment_id_index` (`lecture_id`,`parent_comment_id`),
-  ADD KEY `lecture_comments_lecture_id_is_pinned_index` (`lecture_id`,`is_pinned`),
-  ADD KEY `lecture_comments_lecture_id_is_instructor_comment_index` (`lecture_id`,`is_instructor_comment`),
-  ADD KEY `lecture_comments_is_resolved_index` (`is_resolved`),
-  ADD KEY `lecture_comments_rating_index` (`rating`),
-  ADD KEY `lecture_comments_helpful_votes_index` (`helpful_votes`),
-  ADD KEY `lecture_comments_reported_count_index` (`reported_count`);
+ALTER TABLE `order_notes`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `order_notes_order_id_foreign` (`order_id`),
+  ADD KEY `order_notes_created_by_foreign` (`created_by`);
 
 --
--- Indexes for table `lecture_resources`
+-- Indexes for table `order_statuses`
 --
-ALTER TABLE `lecture_resources`
-  ADD PRIMARY KEY (`resource_id`),
-  ADD KEY `lecture_resources_lecture_id_order_index_index` (`lecture_id`,`order_index`),
-  ADD KEY `lecture_resources_resource_type_index` (`resource_type`),
-  ADD KEY `lecture_resources_is_required_index` (`is_required`),
-  ADD KEY `lecture_resources_is_external_index` (`is_external`);
+ALTER TABLE `order_statuses`
+  ADD PRIMARY KEY (`id`);
 
 --
--- Indexes for table `levels`
+-- Indexes for table `password_reset_tokens`
 --
-ALTER TABLE `levels`
-  ADD PRIMARY KEY (`level_id`),
-  ADD UNIQUE KEY `levels_name_unique` (`name`);
+ALTER TABLE `password_reset_tokens`
+  ADD PRIMARY KEY (`email`);
 
 --
--- Indexes for table `subscriptions`
+-- Indexes for table `payment_methods`
 --
-ALTER TABLE `subscriptions`
-  ADD PRIMARY KEY (`subscription_id`),
-  ADD KEY `subscriptions_user_id_foreign` (`user_id`),
-  ADD KEY `subscriptions_course_id_foreign` (`course_id`);
+ALTER TABLE `payment_methods`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `payment_methods_code_unique` (`code`);
+
+--
+-- Indexes for table `payment_statuses`
+--
+ALTER TABLE `payment_statuses`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `personal_access_tokens`
+--
+ALTER TABLE `personal_access_tokens`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `personal_access_tokens_token_unique` (`token`),
+  ADD KEY `personal_access_tokens_tokenable_type_tokenable_id_index` (`tokenable_type`,`tokenable_id`);
+
+--
+-- Indexes for table `products`
+--
+ALTER TABLE `products`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `products_product_name_unique` (`product_name`),
+  ADD KEY `products_vendor_id_foreign` (`vendor_id`);
+
+--
+-- Indexes for table `product_details`
+--
+ALTER TABLE `product_details`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `product_details_product_id_foreign` (`product_id`);
+
+--
+-- Indexes for table `promotions`
+--
+ALTER TABLE `promotions`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `regions`
+--
+ALTER TABLE `regions`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `regions_name_unique` (`name`);
+
+--
+-- Indexes for table `region_vendor`
+--
+ALTER TABLE `region_vendor`
+  ADD PRIMARY KEY (`region_id`,`vendor_id`),
+  ADD KEY `region_vendor_vendor_id_foreign` (`vendor_id`);
+
+--
+-- Indexes for table `reviews`
+--
+ALTER TABLE `reviews`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `reviews_user_id_foreign` (`user_id`),
+  ADD KEY `reviews_product_id_foreign` (`product_id`);
+
+--
+-- Indexes for table `sessions`
+--
+ALTER TABLE `sessions`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `sessions_user_id_index` (`user_id`),
+  ADD KEY `sessions_last_activity_index` (`last_activity`);
+
+--
+-- Indexes for table `static_pages`
+--
+ALTER TABLE `static_pages`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `static_pages_slug_unique` (`slug`);
+
+--
+-- Indexes for table `support_tickets`
+--
+ALTER TABLE `support_tickets`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `support_tickets_user_id_foreign` (`user_id`);
 
 --
 -- Indexes for table `users`
 --
 ALTER TABLE `users`
-  ADD PRIMARY KEY (`user_id`),
-  ADD UNIQUE KEY `users_email_unique` (`email`);
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `users_email_unique` (`email`),
+  ADD UNIQUE KEY `users_phone_unique` (`phone`);
 
 --
--- Indexes for table `user_course_progress`
+-- Indexes for table `user_vendor`
 --
-ALTER TABLE `user_course_progress`
-  ADD PRIMARY KEY (`user_course_id`),
-  ADD KEY `user_course_progress_user_id_foreign` (`user_id`),
-  ADD KEY `user_course_progress_course_id_foreign` (`course_id`);
+ALTER TABLE `user_vendor`
+  ADD PRIMARY KEY (`user_id`,`vendor_id`),
+  ADD KEY `user_vendor_vendor_id_foreign` (`vendor_id`);
 
 --
--- Indexes for table `user_lecture_progress`
+-- Indexes for table `vendors`
 --
-ALTER TABLE `user_lecture_progress`
-  ADD PRIMARY KEY (`progress_id`),
-  ADD UNIQUE KEY `user_lecture_progress_user_id_lecture_id_unique` (`user_id`,`lecture_id`),
-  ADD KEY `user_lecture_progress_course_id_foreign` (`course_id`),
-  ADD KEY `user_lecture_progress_user_id_course_id_index` (`user_id`,`course_id`),
-  ADD KEY `user_lecture_progress_lecture_id_is_completed_index` (`lecture_id`,`is_completed`),
-  ADD KEY `user_lecture_progress_completion_percentage_index` (`completion_percentage`);
+ALTER TABLE `vendors`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `vendors_brand_name_unique` (`brand_name`);
 
 --
--- Indexes for table `user_video_progress`
+-- Indexes for table `vendor_promotion`
 --
-ALTER TABLE `user_video_progress`
-  ADD PRIMARY KEY (`progress_id`),
-  ADD KEY `user_video_progress_user_id_foreign` (`user_id`),
-  ADD KEY `user_video_progress_video_id_foreign` (`video_id`);
+ALTER TABLE `vendor_promotion`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `vendor_promotion_vendor_id_foreign` (`vendor_id`),
+  ADD KEY `vendor_promotion_promotion_id_foreign` (`promotion_id`);
 
 --
--- Indexes for table `videos`
+-- Indexes for table `wallets`
 --
-ALTER TABLE `videos`
-  ADD PRIMARY KEY (`video_id`),
-  ADD KEY `videos_course_id_foreign` (`course_id`);
+ALTER TABLE `wallets`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `wallets_user_id_index` (`user_id`),
+  ADD KEY `wallets_is_active_index` (`is_active`);
+
+--
+-- Indexes for table `wallet_transactions`
+--
+ALTER TABLE `wallet_transactions`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `wallet_transactions_referenceable_type_referenceable_id_index` (`referenceable_type`,`referenceable_id`),
+  ADD KEY `wallet_transactions_wallet_id_index` (`wallet_id`),
+  ADD KEY `wallet_transactions_type_index` (`type`),
+  ADD KEY `wallet_transactions_reference_id_reference_type_index` (`reference_id`,`reference_type`),
+  ADD KEY `wallet_transactions_created_at_index` (`created_at`);
+
+--
+-- Indexes for table `wishlists`
+--
+ALTER TABLE `wishlists`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `wishlists_user_id_name_unique` (`user_id`,`name`);
+
+--
+-- Indexes for table `wishlist_items`
+--
+ALTER TABLE `wishlist_items`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `wishlist_items_wishlist_id_product_id_unique` (`wishlist_id`,`product_id`),
+  ADD KEY `wishlist_items_product_id_foreign` (`product_id`);
+
+--
+-- AUTO_INCREMENT for dumped tables
+--
+
+--
+-- AUTO_INCREMENT for table `advertisements`
+--
+ALTER TABLE `advertisements`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `carts`
+--
+ALTER TABLE `carts`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `cart_items`
+--
+ALTER TABLE `cart_items`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `categories`
+--
+ALTER TABLE `categories`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `failed_jobs`
+--
+ALTER TABLE `failed_jobs`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `faqs`
+--
+ALTER TABLE `faqs`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `favorites`
+--
+ALTER TABLE `favorites`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `follows`
+--
+ALTER TABLE `follows`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `jobs`
+--
+ALTER TABLE `jobs`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `media`
+--
+ALTER TABLE `media`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `migrations`
+--
+ALTER TABLE `migrations`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `orders`
+--
+ALTER TABLE `orders`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `order_downloads`
+--
+ALTER TABLE `order_downloads`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `order_histories`
+--
+ALTER TABLE `order_histories`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `order_items`
+--
+ALTER TABLE `order_items`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `order_notes`
+--
+ALTER TABLE `order_notes`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `order_statuses`
+--
+ALTER TABLE `order_statuses`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `payment_methods`
+--
+ALTER TABLE `payment_methods`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `payment_statuses`
+--
+ALTER TABLE `payment_statuses`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `personal_access_tokens`
+--
+ALTER TABLE `personal_access_tokens`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `products`
+--
+ALTER TABLE `products`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `product_details`
+--
+ALTER TABLE `product_details`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `promotions`
+--
+ALTER TABLE `promotions`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `regions`
+--
+ALTER TABLE `regions`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `reviews`
+--
+ALTER TABLE `reviews`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `static_pages`
+--
+ALTER TABLE `static_pages`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `support_tickets`
+--
+ALTER TABLE `support_tickets`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `users`
+--
+ALTER TABLE `users`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `vendors`
+--
+ALTER TABLE `vendors`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `vendor_promotion`
+--
+ALTER TABLE `vendor_promotion`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `wallets`
+--
+ALTER TABLE `wallets`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `wallet_transactions`
+--
+ALTER TABLE `wallet_transactions`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `wishlists`
+--
+ALTER TABLE `wishlists`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `wishlist_items`
+--
+ALTER TABLE `wishlist_items`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- Constraints for dumped tables
 --
 
 --
--- Constraints for table `branchables`
+-- Constraints for table `carts`
 --
-ALTER TABLE `branchables`
-  ADD CONSTRAINT `branchables_branch_id_foreign` FOREIGN KEY (`branch_id`) REFERENCES `branches` (`branch_id`) ON DELETE CASCADE;
+ALTER TABLE `carts`
+  ADD CONSTRAINT `carts_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
 
 --
--- Constraints for table `branches`
+-- Constraints for table `cart_items`
 --
-ALTER TABLE `branches`
-  ADD CONSTRAINT `branches_manager_id_foreign` FOREIGN KEY (`manager_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL;
+ALTER TABLE `cart_items`
+  ADD CONSTRAINT `cart_items_cart_id_foreign` FOREIGN KEY (`cart_id`) REFERENCES `carts` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `cart_items_product_id_foreign` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `cart_items_vendor_id_foreign` FOREIGN KEY (`vendor_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
 
 --
--- Constraints for table `children_universities`
+-- Constraints for table `category_product`
 --
-ALTER TABLE `children_universities`
-  ADD CONSTRAINT `children_universities_level_id_foreign` FOREIGN KEY (`level_id`) REFERENCES `levels` (`level_id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `children_universities_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE;
+ALTER TABLE `category_product`
+  ADD CONSTRAINT `category_product_category_id_foreign` FOREIGN KEY (`category_id`) REFERENCES `categories` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `category_product_product_id_foreign` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE CASCADE;
 
 --
--- Constraints for table `child_level_subscriptions`
+-- Constraints for table `favorites`
 --
-ALTER TABLE `child_level_subscriptions`
-  ADD CONSTRAINT `child_level_subscriptions_child_id_foreign` FOREIGN KEY (`child_id`) REFERENCES `children_universities` (`id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `child_level_subscriptions_level_id_foreign` FOREIGN KEY (`level_id`) REFERENCES `levels` (`level_id`) ON DELETE CASCADE;
+ALTER TABLE `favorites`
+  ADD CONSTRAINT `favorites_product_id_foreign` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `favorites_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
 
 --
--- Constraints for table `classes`
+-- Constraints for table `follows`
 --
-ALTER TABLE `classes`
-  ADD CONSTRAINT `classes_branch_id_foreign` FOREIGN KEY (`branch_id`) REFERENCES `branches` (`branch_id`) ON DELETE SET NULL,
-  ADD CONSTRAINT `classes_course_id_foreign` FOREIGN KEY (`course_id`) REFERENCES `courses` (`course_id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `classes_created_by_foreign` FOREIGN KEY (`created_by`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `classes_level_id_foreign` FOREIGN KEY (`level_id`) REFERENCES `levels` (`level_id`) ON DELETE SET NULL;
+ALTER TABLE `follows`
+  ADD CONSTRAINT `follows_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `follows_vendor_id_foreign` FOREIGN KEY (`vendor_id`) REFERENCES `vendors` (`id`) ON DELETE CASCADE;
 
 --
--- Constraints for table `class_moderators`
+-- Constraints for table `orders`
 --
-ALTER TABLE `class_moderators`
-  ADD CONSTRAINT `class_moderators_class_id_foreign` FOREIGN KEY (`class_id`) REFERENCES `classes` (`class_id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `class_moderators_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE;
+ALTER TABLE `orders`
+  ADD CONSTRAINT `orders_cart_id_foreign` FOREIGN KEY (`cart_id`) REFERENCES `carts` (`id`) ON DELETE SET NULL,
+  ADD CONSTRAINT `orders_payment_method_id_foreign` FOREIGN KEY (`payment_method_id`) REFERENCES `payment_methods` (`id`),
+  ADD CONSTRAINT `orders_payment_status_id_foreign` FOREIGN KEY (`payment_status_id`) REFERENCES `payment_statuses` (`id`),
+  ADD CONSTRAINT `orders_status_id_foreign` FOREIGN KEY (`status_id`) REFERENCES `order_statuses` (`id`),
+  ADD CONSTRAINT `orders_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL;
 
 --
--- Constraints for table `class_students`
+-- Constraints for table `order_downloads`
 --
-ALTER TABLE `class_students`
-  ADD CONSTRAINT `class_students_child_id_foreign` FOREIGN KEY (`child_id`) REFERENCES `children_universities` (`id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `class_students_class_id_foreign` FOREIGN KEY (`class_id`) REFERENCES `classes` (`class_id`) ON DELETE CASCADE;
+ALTER TABLE `order_downloads`
+  ADD CONSTRAINT `order_downloads_order_id_foreign` FOREIGN KEY (`order_id`) REFERENCES `orders` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `order_downloads_order_item_id_foreign` FOREIGN KEY (`order_item_id`) REFERENCES `order_items` (`id`) ON DELETE CASCADE;
 
 --
--- Constraints for table `courses`
+-- Constraints for table `order_histories`
 --
-ALTER TABLE `courses`
-  ADD CONSTRAINT `courses_category_id_foreign` FOREIGN KEY (`category_id`) REFERENCES `categories` (`category_id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `courses_instructor_id_foreign` FOREIGN KEY (`instructor_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE;
+ALTER TABLE `order_histories`
+  ADD CONSTRAINT `order_histories_created_by_foreign` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+  ADD CONSTRAINT `order_histories_order_id_foreign` FOREIGN KEY (`order_id`) REFERENCES `orders` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `order_histories_status_id_foreign` FOREIGN KEY (`status_id`) REFERENCES `order_statuses` (`id`);
 
 --
--- Constraints for table `course_details`
+-- Constraints for table `order_items`
 --
-ALTER TABLE `course_details`
-  ADD CONSTRAINT `course_details_course_id_foreign` FOREIGN KEY (`course_id`) REFERENCES `courses` (`course_id`) ON DELETE CASCADE;
+ALTER TABLE `order_items`
+  ADD CONSTRAINT `order_items_order_id_foreign` FOREIGN KEY (`order_id`) REFERENCES `orders` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `order_items_product_id_foreign` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `order_items_vendor_id_foreign` FOREIGN KEY (`vendor_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
 
 --
--- Constraints for table `course_enrollments`
+-- Constraints for table `order_notes`
 --
-ALTER TABLE `course_enrollments`
-  ADD CONSTRAINT `course_enrollments_course_id_foreign` FOREIGN KEY (`course_id`) REFERENCES `courses` (`course_id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `course_enrollments_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL;
+ALTER TABLE `order_notes`
+  ADD CONSTRAINT `order_notes_created_by_foreign` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `order_notes_order_id_foreign` FOREIGN KEY (`order_id`) REFERENCES `orders` (`id`) ON DELETE CASCADE;
 
 --
--- Constraints for table `course_level`
+-- Constraints for table `products`
 --
-ALTER TABLE `course_level`
-  ADD CONSTRAINT `course_level_course_id_foreign` FOREIGN KEY (`course_id`) REFERENCES `courses` (`course_id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `course_level_level_id_foreign` FOREIGN KEY (`level_id`) REFERENCES `levels` (`level_id`) ON DELETE CASCADE;
+ALTER TABLE `products`
+  ADD CONSTRAINT `products_vendor_id_foreign` FOREIGN KEY (`vendor_id`) REFERENCES `vendors` (`id`) ON DELETE CASCADE;
 
 --
--- Constraints for table `course_moderators`
+-- Constraints for table `product_details`
 --
-ALTER TABLE `course_moderators`
-  ADD CONSTRAINT `course_moderators_course_id_foreign` FOREIGN KEY (`course_id`) REFERENCES `courses` (`course_id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `course_moderators_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE;
+ALTER TABLE `product_details`
+  ADD CONSTRAINT `product_details_product_id_foreign` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE CASCADE;
 
 --
--- Constraints for table `course_pricings`
+-- Constraints for table `region_vendor`
 --
-ALTER TABLE `course_pricings`
-  ADD CONSTRAINT `course_pricings_course_id_foreign` FOREIGN KEY (`course_id`) REFERENCES `courses` (`course_id`) ON DELETE CASCADE;
+ALTER TABLE `region_vendor`
+  ADD CONSTRAINT `region_vendor_region_id_foreign` FOREIGN KEY (`region_id`) REFERENCES `regions` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `region_vendor_vendor_id_foreign` FOREIGN KEY (`vendor_id`) REFERENCES `vendors` (`id`) ON DELETE CASCADE;
 
 --
--- Constraints for table `course_purchases`
+-- Constraints for table `reviews`
 --
-ALTER TABLE `course_purchases`
-  ADD CONSTRAINT `course_purchases_child_id_foreign` FOREIGN KEY (`child_id`) REFERENCES `children_universities` (`id`) ON DELETE SET NULL,
-  ADD CONSTRAINT `course_purchases_course_id_foreign` FOREIGN KEY (`course_id`) REFERENCES `courses` (`course_id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `course_purchases_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE;
+ALTER TABLE `reviews`
+  ADD CONSTRAINT `reviews_product_id_foreign` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `reviews_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
 
 --
--- Constraints for table `instructor_profiles`
+-- Constraints for table `support_tickets`
 --
-ALTER TABLE `instructor_profiles`
-  ADD CONSTRAINT `instructor_profiles_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE;
+ALTER TABLE `support_tickets`
+  ADD CONSTRAINT `support_tickets_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
 
 --
--- Constraints for table `lectures`
+-- Constraints for table `user_vendor`
 --
-ALTER TABLE `lectures`
-  ADD CONSTRAINT `lectures_course_id_foreign` FOREIGN KEY (`course_id`) REFERENCES `courses` (`course_id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `lectures_instructor_id_foreign` FOREIGN KEY (`instructor_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL;
+ALTER TABLE `user_vendor`
+  ADD CONSTRAINT `user_vendor_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `user_vendor_vendor_id_foreign` FOREIGN KEY (`vendor_id`) REFERENCES `vendors` (`id`) ON DELETE CASCADE;
 
 --
--- Constraints for table `lecture_attachments`
+-- Constraints for table `vendor_promotion`
 --
-ALTER TABLE `lecture_attachments`
-  ADD CONSTRAINT `lecture_attachments_lecture_id_foreign` FOREIGN KEY (`lecture_id`) REFERENCES `lectures` (`lecture_id`) ON DELETE CASCADE;
+ALTER TABLE `vendor_promotion`
+  ADD CONSTRAINT `vendor_promotion_promotion_id_foreign` FOREIGN KEY (`promotion_id`) REFERENCES `promotions` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `vendor_promotion_vendor_id_foreign` FOREIGN KEY (`vendor_id`) REFERENCES `vendors` (`id`) ON DELETE CASCADE;
 
 --
--- Constraints for table `lecture_comments`
+-- Constraints for table `wallets`
 --
-ALTER TABLE `lecture_comments`
-  ADD CONSTRAINT `lecture_comments_lecture_id_foreign` FOREIGN KEY (`lecture_id`) REFERENCES `lectures` (`lecture_id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `lecture_comments_parent_comment_id_foreign` FOREIGN KEY (`parent_comment_id`) REFERENCES `lecture_comments` (`comment_id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `lecture_comments_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE;
+ALTER TABLE `wallets`
+  ADD CONSTRAINT `wallets_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
 
 --
--- Constraints for table `lecture_resources`
+-- Constraints for table `wallet_transactions`
 --
-ALTER TABLE `lecture_resources`
-  ADD CONSTRAINT `lecture_resources_lecture_id_foreign` FOREIGN KEY (`lecture_id`) REFERENCES `lectures` (`lecture_id`) ON DELETE CASCADE;
+ALTER TABLE `wallet_transactions`
+  ADD CONSTRAINT `wallet_transactions_wallet_id_foreign` FOREIGN KEY (`wallet_id`) REFERENCES `wallets` (`id`) ON DELETE CASCADE;
 
 --
--- Constraints for table `subscriptions`
+-- Constraints for table `wishlists`
 --
-ALTER TABLE `subscriptions`
-  ADD CONSTRAINT `subscriptions_course_id_foreign` FOREIGN KEY (`course_id`) REFERENCES `courses` (`course_id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `subscriptions_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE;
+ALTER TABLE `wishlists`
+  ADD CONSTRAINT `wishlists_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
 
 --
--- Constraints for table `user_course_progress`
+-- Constraints for table `wishlist_items`
 --
-ALTER TABLE `user_course_progress`
-  ADD CONSTRAINT `user_course_progress_course_id_foreign` FOREIGN KEY (`course_id`) REFERENCES `courses` (`course_id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `user_course_progress_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE;
-
---
--- Constraints for table `user_lecture_progress`
---
-ALTER TABLE `user_lecture_progress`
-  ADD CONSTRAINT `user_lecture_progress_course_id_foreign` FOREIGN KEY (`course_id`) REFERENCES `courses` (`course_id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `user_lecture_progress_lecture_id_foreign` FOREIGN KEY (`lecture_id`) REFERENCES `lectures` (`lecture_id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `user_lecture_progress_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE;
-
---
--- Constraints for table `user_video_progress`
---
-ALTER TABLE `user_video_progress`
-  ADD CONSTRAINT `user_video_progress_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `user_video_progress_video_id_foreign` FOREIGN KEY (`video_id`) REFERENCES `videos` (`video_id`) ON DELETE CASCADE;
-
---
--- Constraints for table `videos`
---
-ALTER TABLE `videos`
-  ADD CONSTRAINT `videos_course_id_foreign` FOREIGN KEY (`course_id`) REFERENCES `courses` (`course_id`) ON DELETE CASCADE;
+ALTER TABLE `wishlist_items`
+  ADD CONSTRAINT `wishlist_items_product_id_foreign` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `wishlist_items_wishlist_id_foreign` FOREIGN KEY (`wishlist_id`) REFERENCES `wishlists` (`id`) ON DELETE CASCADE;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

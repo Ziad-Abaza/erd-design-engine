@@ -3,11 +3,11 @@
 import React, { useState } from 'react';
 import { Panel } from 'reactflow';
 import { useDiagramStore } from '@/store/use-diagram-store';
-import { Download, FileImage, FileText, Upload, Database, Layout, ChevronDown, Activity } from 'lucide-react';
+import { Download, FileImage, FileText, Upload, Database, Layout, ChevronDown, Activity, RotateCcw, AlertTriangle } from 'lucide-react';
 import { SqlImportPanel } from './sql-import-panel';
 
 const Toolbar = () => {
-    const { selectedNodes, deleteSelectedNodes, addTable, detectRelationships, autoLayout, runValidation } = useDiagramStore();
+    const { selectedNodes, deleteSelectedNodes, addTable, detectRelationships, autoLayout, runValidation, clearDiagram } = useDiagramStore();
     const [showImportPanel, setShowImportPanel] = useState(false);
     const [showLayoutOptions, setShowLayoutOptions] = useState(false);
 
@@ -20,6 +20,12 @@ const Toolbar = () => {
         const tableName = prompt('Enter table name:');
         if (tableName?.trim()) {
             addTable({ label: tableName.trim() });
+        }
+    };
+
+    const handleNewProject = () => {
+        if (window.confirm('Are you sure you want to start a new project? This will clear all current tables and relationships.')) {
+            clearDiagram();
         }
     };
 
@@ -58,6 +64,15 @@ const Toolbar = () => {
                             className="bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors flex items-center justify-center p-2 text-xs font-medium"
                         >
                             + Add Table
+                        </button>
+
+                        {/* New Project Button */}
+                        <button
+                            onClick={handleNewProject}
+                            className="bg-orange-600 hover:bg-orange-700 text-white rounded transition-colors flex items-center justify-center gap-1 p-2 text-xs font-medium"
+                        >
+                            <RotateCcw className="w-3 h-3" />
+                            New Project
                         </button>
 
                         {/* Delete Selected Button */}
