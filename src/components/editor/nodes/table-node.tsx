@@ -21,6 +21,8 @@ export type Column = {
     autoIncrement?: boolean;
     collation?: string;
     comment?: string;
+    referencedTable?: string;
+    referencedColumn?: string;
 };
 
 export type TableIndex = {

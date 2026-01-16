@@ -14,6 +14,7 @@ export interface SQLParseResult {
         referencedColumn: string;
         onDelete?: string;
         onUpdate?: string;
+        cardinality?: '1:1' | '1:N' | 'N:M';
     }>;
     errors: string[];
     warnings: string[];
@@ -52,6 +53,7 @@ interface AlterTableConstraints {
         referencedColumn: string;
         onDelete?: string;
         onUpdate?: string;
+        cardinality?: '1:1' | '1:N' | 'N:M';
     }>;
     primaryKeys: Array<{
         tableName: string;
@@ -81,7 +83,8 @@ function extractConstraintsFromAlterTable(sql: string): AlterTableConstraints {
     cleaned = cleaned.replace(/^#.*$/gm, '');
 
     // Match each ALTER TABLE statement
-    const alterTableRegex = /ALTER\s+TABLE\s+`([^`]+)`\s+([\s\S]+?);/gi;
+    // Handles backticks, double quotes, or no quotes for table names
+    const alterTableRegex = /ALTER\s+TABLE\s+(?:[`"']?)([^`"'\s]+)(?:[`"']?)\s+([\s\S]+?);/gi;
     let match;
 
     while ((match = alterTableRegex.exec(cleaned)) !== null) {
@@ -96,46 +99,58 @@ function extractConstraintsFromAlterTable(sql: string): AlterTableConstraints {
             const upperSegment = segment.toUpperCase();
 
             // 1. Primary Keys
-            if (upperSegment.startsWith('ADD PRIMARY KEY')) {
+            // Handles ADD PRIMARY KEY (`id`) or ADD PRIMARY KEY (id)
+            if (upperSegment.includes('ADD PRIMARY KEY')) {
                 const pkMatch = segment.match(/ADD\s+PRIMARY\s+KEY\s*\(([^)]+)\)/i);
                 if (pkMatch) {
-                    const columnNames = pkMatch[1].split(',').map(c => c.trim().replace(/`/g, ''));
+                    const columnNames = pkMatch[1].split(',').map(c => c.trim().replace(/[`"']/g, ''));
                     results.primaryKeys.push({ tableName, columnNames });
                 }
             }
             // 2. Foreign Keys
+            // Handles ADD CONSTRAINT `fk_name` FOREIGN KEY (`col`) REFERENCES `ref_table` (`ref_col`)
+            // Also handles versions without CONSTRAINT name or without backticks
             else if (upperSegment.includes('FOREIGN KEY')) {
-                const fkRegex = /(?:ADD\s+CONSTRAINT\s+`[^`]*`\s+)?FOREIGN\s+KEY\s*\(`([^`]+)`\)\s+REFERENCES\s+`([^`]+)`\s*\(`([^`]+)`\)(?:\s+ON\s+(DELETE|UPDATE)\s+(CASCADE|SET\s+NULL|RESTRICT|NO\s+ACTION))?/gi;
+                const fkRegex = /(?:ADD\s+)?(?:CONSTRAINT\s+(?:[`"']?)[^`"'\s]*(?:[`"']?)\s+)?FOREIGN\s+KEY\s*\(([^)]+)\)\s+REFERENCES\s+(?:[`"']?)([^`"'\s]+)(?:[`"']?)\s*\(([^)]+)\)(?:\s+ON\s+(DELETE|UPDATE)\s+(CASCADE|SET\s+NULL|RESTRICT|NO\s+ACTION|SET\s+DEFAULT))?/gi;
                 let fkMatch;
+                // Reset regex lastIndex because we are using 'g' flag
+                fkRegex.lastIndex = 0;
                 while ((fkMatch = fkRegex.exec(segment)) !== null) {
-                    const columnName = fkMatch[1];
+                    const columnNames = fkMatch[1].split(',').map(c => c.trim().replace(/[`"']/g, ''));
                     const referencedTable = fkMatch[2];
-                    const referencedColumn = fkMatch[3];
+                    const referencedColumns = fkMatch[3].split(',').map(c => c.trim().replace(/[`"']/g, ''));
                     const actionType = fkMatch[4];
                     const actionValue = fkMatch[5];
 
-                    results.foreignKeys.push({
-                        tableName,
-                        columnName,
-                        referencedTable,
-                        referencedColumn,
-                        ...(actionType && actionValue && {
-                            [actionType.toLowerCase() === 'delete' ? 'onDelete' : 'onUpdate']: actionValue.replace(/\s+/g, ' ')
-                        })
+                    // For now, we only support single column foreign keys in the UI/Store, 
+                    // but we collect them all. We'll add the first column if it's a composite key.
+                    columnNames.forEach((columnName, index) => {
+                        const referencedColumn = referencedColumns[index] || referencedColumns[0];
+                        results.foreignKeys.push({
+                            tableName,
+                            columnName,
+                            referencedTable,
+                            referencedColumn,
+                            ...(actionType && actionValue && {
+                                [actionType.toLowerCase() === 'delete' ? 'onDelete' : 'onUpdate']: actionValue.replace(/\s+/g, ' ')
+                            })
+                        });
                     });
                 }
             }
             // 3. Unique Keys
-            else if (upperSegment.startsWith('ADD UNIQUE')) {
-                const uniqueMatch = segment.match(/ADD\s+UNIQUE\s+(?:KEY|INDEX)?\s+(?:`[^`]+`\s+)?\(([^)]+)\)/i);
+            // Handles ADD UNIQUE KEY `name` (`col`) or ADD UNIQUE (`col`)
+            else if (upperSegment.includes('ADD UNIQUE')) {
+                const uniqueMatch = segment.match(/ADD\s+UNIQUE\s+(?:KEY|INDEX)?\s*(?:(?:[`"']?)[^`"'\s]*(?:[`"']?)\s+)?\(([^)]+)\)/i);
                 if (uniqueMatch) {
-                    const columnNames = uniqueMatch[1].split(',').map(c => c.trim().replace(/`/g, ''));
+                    const columnNames = uniqueMatch[1].split(',').map(c => c.trim().replace(/[`"']/g, ''));
                     results.uniqueKeys.push({ tableName, columnNames });
                 }
             }
             // 4. Auto Increment
+            // Handles MODIFY `id` INT AUTO_INCREMENT
             else if (upperSegment.includes('AUTO_INCREMENT')) {
-                const aiMatch = segment.match(/MODIFY\s+`([^`]+)`/i);
+                const aiMatch = segment.match(/(?:MODIFY|CHANGE|ALTER)\s+(?:[`"']?)([^`"'\s]+)(?:[`"']?)/i);
                 if (aiMatch) {
                     results.autoIncrements.push({ tableName, columnName: aiMatch[1] });
                 }
@@ -332,6 +347,8 @@ export function parseSQLFile(sql: string): SQLParseResult {
             const column = table.columns.find(c => c.name === fk.columnName);
             if (column) {
                 column.isForeignKey = true;
+                column.referencedTable = fk.referencedTable;
+                column.referencedColumn = fk.referencedColumn;
             } else {
                 result.warnings.push(`Foreign key column "${fk.columnName}" not found in table "${fk.tableName}"`);
             }
@@ -415,6 +432,7 @@ function parseCreateTableStatement(stmt: any): {
         referencedColumn: string;
         onDelete?: string;
         onUpdate?: string;
+        cardinality?: '1:1' | '1:N' | 'N:M';
     }>;
     warnings: string[];
 } {
@@ -431,6 +449,7 @@ function parseCreateTableStatement(stmt: any): {
         referencedColumn: string;
         onDelete?: string;
         onUpdate?: string;
+        cardinality?: '1:1' | '1:N' | 'N:M';
     }> = [];
     const warnings: string[] = [];
     const indexes: TableIndex[] = [];
@@ -536,6 +555,16 @@ function parseCreateTableStatement(stmt: any): {
         }
     }
 
+    // Final pass for relationships to determine cardinality
+    foreignKeys.forEach(fk => {
+        const sourceCol = columns.find(c => c.name === fk.columnName);
+        if (sourceCol && (sourceCol.isUnique || sourceCol.isPrimaryKey)) {
+            fk.cardinality = '1:1';
+        } else {
+            fk.cardinality = '1:N';
+        }
+    });
+
     const table: TableNodeData = {
         label: tableName,
         columns,
@@ -625,7 +654,9 @@ function parseColumnDefinition(item: any): {
                                 defaultValue,
                                 autoIncrement,
                                 collation,
-                                comment
+                                comment,
+                                referencedTable: refTable,
+                                referencedColumn: refColumn
                             },
                             foreignKey: {
                                 columnName: colName,

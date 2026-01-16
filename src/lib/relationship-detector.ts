@@ -34,17 +34,17 @@ export class RelationshipDetector {
         if (column.isForeignKey) {
           // First try to find explicit foreign key reference information
           const explicitRef = this.findExplicitReference(sourceNode, column, nodes);
-          
+
           if (explicitRef) {
             relationships.push(explicitRef);
           } else {
             // Fallback to inference from column name convention
             const targetTableName = this.inferTargetTable(column.name, Array.from(tableMap.keys()));
-            
+
             if (targetTableName && tableMap.has(targetTableName)) {
               const targetNode = tableMap.get(targetTableName)!;
               const targetColumn = this.findTargetColumn(column, targetNode.data.columns);
-              
+
               if (targetColumn) {
                 const relationship: Relationship = {
                   id: `${sourceNode.id}-${targetNode.id}-${column.name}`,
@@ -54,7 +54,7 @@ export class RelationshipDetector {
                   targetColumn: targetColumn.name,
                   cardinality: this.determineCardinality(column, targetColumn),
                 };
-                
+
                 relationships.push(relationship);
               }
             }
@@ -88,12 +88,12 @@ export class RelationshipDetector {
 
   static validateAndHighlightEdges(nodes: Node<TableNodeData>[], edges: Edge[]): Edge[] {
     const validation = this.validateRelationships(nodes, edges);
-    
+
     return edges.map(edge => {
-      const isValid = validation.isValid && !validation.errors.some(error => 
+      const isValid = validation.isValid && !validation.errors.some(error =>
         error.includes(edge.id) || error.includes(edge.source) || error.includes(edge.target)
       );
-      
+
       return {
         ...edge,
         data: {
@@ -167,15 +167,35 @@ export class RelationshipDetector {
   }
 
   private static findExplicitReference(
-    sourceNode: Node<TableNodeData>, 
-    column: Column, 
+    sourceNode: Node<TableNodeData>,
+    column: Column,
     nodes: Node<TableNodeData>[]
   ): Relationship | null {
-    // For now, this is a placeholder for explicit reference detection
-    // In a full implementation, this would parse the SQL foreign key constraints
-    // and extract the exact referenced table and column information
-    
-    // Check if column name suggests a specific reference
+    // 1. Check if column already has explicit reference metadata from SQL parsing
+    if (column.referencedTable && column.referencedColumn) {
+      const targetNode = nodes.find(n =>
+        n.data.label.toLowerCase() === column.referencedTable?.toLowerCase()
+      );
+
+      if (targetNode) {
+        const targetColumn = targetNode.data.columns.find(c =>
+          c.name.toLowerCase() === column.referencedColumn?.toLowerCase()
+        );
+
+        if (targetColumn) {
+          return {
+            id: `${sourceNode.id}-${targetNode.id}-${column.name}`,
+            sourceTable: sourceNode.data.label,
+            sourceColumn: column.name,
+            targetTable: targetNode.data.label,
+            targetColumn: targetColumn.name,
+            cardinality: this.determineCardinality(column, targetColumn),
+          };
+        }
+      }
+    }
+
+    // 2. Check if column name suggests a specific reference (heuristic)
     const patterns = [
       /^(.*)_id$/,           // user_id -> users
       /^(.*)_fk$/,           // user_fk -> users
@@ -187,11 +207,11 @@ export class RelationshipDetector {
       const match = column.name.match(pattern);
       if (match) {
         const tableName = match[1];
-        const targetNode = nodes.find(n => 
-          n.data.label.toLowerCase() === tableName || 
-          n.data.label.toLowerCase() === `${tableName}s`
+        const targetNode = nodes.find(n =>
+          n.data.label.toLowerCase() === tableName.toLowerCase() ||
+          n.data.label.toLowerCase() === `${tableName}s`.toLowerCase()
         );
-        
+
         if (targetNode) {
           const targetColumn = this.findTargetColumn(column, targetNode.data.columns);
           if (targetColumn) {
@@ -241,7 +261,7 @@ export class RelationshipDetector {
 
   private static findTargetColumn(sourceColumn: Column, targetColumns: Column[]): Column | null {
     // First try to find a primary key with the same name
-    const pkMatch = targetColumns.find(col => 
+    const pkMatch = targetColumns.find(col =>
       col.isPrimaryKey && col.name === sourceColumn.name
     );
     if (pkMatch) return pkMatch;

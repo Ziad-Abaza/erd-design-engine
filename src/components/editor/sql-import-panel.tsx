@@ -26,6 +26,7 @@ interface ImportResult {
         referencedColumn: string
         onDelete?: string
         onUpdate?: string
+        cardinality?: '1:1' | '1:N' | 'N:M'
     }>
 }
 
@@ -35,7 +36,7 @@ export function SqlImportPanel({ onClose }: { onClose: () => void }) {
     const [importResult, setImportResult] = useState<ImportResult | null>(null)
     const [sqlContent, setSqlContent] = useState('')
     const fileInputRef = useRef<HTMLInputElement>(null)
-    
+
     const { setNodes, setEdges, autoLayout } = useDiagramStore()
 
     const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -51,14 +52,14 @@ export function SqlImportPanel({ onClose }: { onClose: () => void }) {
     const handleDrop = useCallback(async (e: React.DragEvent) => {
         e.preventDefault()
         setIsDragging(false)
-        
+
         const files = Array.from(e.dataTransfer.files)
-        const sqlFile = files.find(file => 
-            file.name.toLowerCase().endsWith('.sql') || 
-            file.type === 'text/sql' || 
+        const sqlFile = files.find(file =>
+            file.name.toLowerCase().endsWith('.sql') ||
+            file.type === 'text/sql' ||
             file.type === 'text/plain'
         )
-        
+
         if (sqlFile) {
             await processFile(sqlFile)
         } else {
@@ -83,7 +84,7 @@ export function SqlImportPanel({ onClose }: { onClose: () => void }) {
     const processFile = async (file: File) => {
         setIsProcessing(true)
         setImportResult(null)
-        
+
         try {
             const content = await file.text()
             setSqlContent(content)
@@ -106,7 +107,7 @@ export function SqlImportPanel({ onClose }: { onClose: () => void }) {
         try {
             // Parse SQL to get comprehensive result
             const parseResult = parseSQLFile(sql)
-            
+
             if (parseResult.tables.length === 0) {
                 setImportResult({
                     success: false,
@@ -140,22 +141,22 @@ export function SqlImportPanel({ onClose }: { onClose: () => void }) {
             // Create edges from foreign key relationships
             const edges: Edge[] = []
             const tableMap = new Map<string, string>()
-            
+
             parseResult.tables.forEach((table: TableNodeData, index: number) => {
                 tableMap.set(table.label, `table_${importTimestamp}_${index}`)
             })
-            
+
             parseResult.foreignKeyConstraints.forEach((fk) => {
                 const sourceTableId = tableMap.get(fk.tableName)
                 const targetTableId = tableMap.get(fk.referencedTable)
-                
+
                 if (sourceTableId && targetTableId) {
                     const sourceTable = parseResult.tables.find((t: TableNodeData) => t.label === fk.tableName)
                     const targetTable = parseResult.tables.find((t: TableNodeData) => t.label === fk.referencedTable)
-                    
+
                     const sourceColumn = sourceTable?.columns.find((col: Column) => col.name === fk.columnName)
                     const targetColumn = targetTable?.columns.find((col: Column) => col.name === fk.referencedColumn)
-                    
+
                     if (sourceColumn && targetColumn) {
                         edges.push({
                             id: `fk_${sourceTableId}_${sourceColumn.id}_to_${targetTableId}_${targetColumn.id}`,
@@ -163,13 +164,19 @@ export function SqlImportPanel({ onClose }: { onClose: () => void }) {
                             target: targetTableId,
                             sourceHandle: sourceColumn.id,
                             targetHandle: targetColumn.id,
-                            type: 'smoothstep',
+                            type: 'relationship', // Changed from smoothstep to relationship for crows foot
                             animated: true,
                             style: { stroke: '#3b82f6', strokeWidth: 2 },
-                            label: `${fk.columnName} → ${fk.referencedColumn}`,
                             data: {
+                                relationship: {
+                                    sourceColumn: fk.columnName,
+                                    targetColumn: fk.referencedColumn,
+                                    cardinality: fk.cardinality || '1:N'
+                                },
+                                label: `${fk.columnName} → ${fk.referencedColumn}`,
                                 onDelete: fk.onDelete,
-                                onUpdate: fk.onUpdate
+                                onUpdate: fk.onUpdate,
+                                isValid: true
                             }
                         })
                     }
@@ -188,7 +195,7 @@ export function SqlImportPanel({ onClose }: { onClose: () => void }) {
 
             // Combine warnings from parsing and additional checks
             const warnings: string[] = [...parseResult.warnings]
-            
+
             parseResult.tables.forEach((table: TableNodeData) => {
                 if (table.columns.length === 0) {
                     warnings.push(`Table "${table.label}" has no columns`)
@@ -220,7 +227,7 @@ export function SqlImportPanel({ onClose }: { onClose: () => void }) {
         }
     }
 
-    
+
     const handleImport = useCallback(() => {
         if (!importResult?.success) return
 
@@ -246,24 +253,24 @@ export function SqlImportPanel({ onClose }: { onClose: () => void }) {
             // Create edges from foreign key relationships using stored constraints
             const edges: Edge[] = []
             const tableMap = new Map<string, string>()
-            
+
             importResult.tables.forEach((table: TableNodeData, index: number) => {
                 tableMap.set(table.label, `table_${importTimestamp}_${index}`)
             })
-            
+
             // Use the stored foreign key constraints to create edges
             if (importResult.foreignKeyConstraints) {
                 importResult.foreignKeyConstraints.forEach((fk) => {
                     const sourceTableId = tableMap.get(fk.tableName)
                     const targetTableId = tableMap.get(fk.referencedTable)
-                    
+
                     if (sourceTableId && targetTableId) {
                         const sourceTable = importResult.tables.find((t: TableNodeData) => t.label === fk.tableName)
                         const targetTable = importResult.tables.find((t: TableNodeData) => t.label === fk.referencedTable)
-                        
+
                         const sourceColumn = sourceTable?.columns.find((col: Column) => col.name === fk.columnName)
                         const targetColumn = targetTable?.columns.find((col: Column) => col.name === fk.referencedColumn)
-                        
+
                         if (sourceColumn && targetColumn) {
                             edges.push({
                                 id: `fk_${sourceTableId}_${sourceColumn.id}_to_${targetTableId}_${targetColumn.id}`,
@@ -271,13 +278,19 @@ export function SqlImportPanel({ onClose }: { onClose: () => void }) {
                                 target: targetTableId,
                                 sourceHandle: sourceColumn.id,
                                 targetHandle: targetColumn.id,
-                                type: 'smoothstep',
+                                type: 'relationship',
                                 animated: true,
                                 style: { stroke: '#3b82f6', strokeWidth: 2 },
-                                label: `${fk.columnName} → ${fk.referencedColumn}`,
                                 data: {
+                                    relationship: {
+                                        sourceColumn: fk.columnName,
+                                        targetColumn: fk.referencedColumn,
+                                        cardinality: fk.cardinality || '1:N'
+                                    },
+                                    label: `${fk.columnName} → ${fk.referencedColumn}`,
                                     onDelete: fk.onDelete,
-                                    onUpdate: fk.onUpdate
+                                    onUpdate: fk.onUpdate,
+                                    isValid: true
                                 }
                             })
                         }
@@ -287,16 +300,16 @@ export function SqlImportPanel({ onClose }: { onClose: () => void }) {
 
             // Apply layout
             const layoutResult = LayoutEngine.autoLayout(nodes, edges, { direction: 'TB' })
-            
+
             // Update the store
             setNodes(layoutResult.nodes)
             setEdges(edges)
-            
+
             // Apply auto-layout to optimize positioning
             setTimeout(() => {
                 autoLayout({ direction: 'TB', type: 'hierarchical' })
             }, 100)
-            
+
             onClose()
         } catch (error) {
             console.error('Failed to import:', error)
@@ -331,11 +344,10 @@ export function SqlImportPanel({ onClose }: { onClose: () => void }) {
                     {!importResult && (
                         <>
                             <div
-                                className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-                                    isDragging
-                                        ? 'border-primary bg-primary/5'
-                                        : 'border-border hover:border-muted-foreground/50'
-                                }`}
+                                className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${isDragging
+                                    ? 'border-primary bg-primary/5'
+                                    : 'border-border hover:border-muted-foreground/50'
+                                    }`}
                                 onDragOver={handleDragOver}
                                 onDragLeave={handleDragLeave}
                                 onDrop={handleDrop}
@@ -383,17 +395,15 @@ export function SqlImportPanel({ onClose }: { onClose: () => void }) {
 
                     {importResult && (
                         <div className="space-y-4">
-                            <div className={`flex items-center gap-2 p-3 rounded-md ${
-                                importResult.success ? 'bg-green-50 dark:bg-green-900/20' : 'bg-red-50 dark:bg-red-900/20'
-                            }`}>
+                            <div className={`flex items-center gap-2 p-3 rounded-md ${importResult.success ? 'bg-green-50 dark:bg-green-900/20' : 'bg-red-50 dark:bg-red-900/20'
+                                }`}>
                                 {importResult.success ? (
                                     <CheckCircle className="w-5 h-5 text-green-600" />
                                 ) : (
                                     <AlertCircle className="w-5 h-5 text-red-600" />
                                 )}
-                                <span className={`text-sm font-medium ${
-                                    importResult.success ? 'text-green-800 dark:text-green-200' : 'text-red-800 dark:text-red-200'
-                                }`}>
+                                <span className={`text-sm font-medium ${importResult.success ? 'text-green-800 dark:text-green-200' : 'text-red-800 dark:text-red-200'
+                                    }`}>
                                     {importResult.success ? 'SQL parsed successfully!' : 'Failed to parse SQL'}
                                 </span>
                             </div>
@@ -425,7 +435,7 @@ export function SqlImportPanel({ onClose }: { onClose: () => void }) {
                                             </div>
                                         ))}
                                     </div>
-                                    
+
                                     {/* Help section for parsing errors */}
                                     <div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-md">
                                         <h5 className="text-xs font-medium text-amber-800 dark:text-amber-200 mb-2">💡 Need a working example?</h5>
