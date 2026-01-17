@@ -7,6 +7,7 @@ import { parseSQLFile } from '@/lib/sql-parser'
 import { Node, Edge } from 'reactflow'
 import { Column, TableNodeData } from './nodes/table-node'
 import { LayoutEngine } from '@/lib/layout-engine'
+import { calculateSmartOrthogonalPath } from '@/lib/edge-routing'
 
 interface ImportResult {
     success: boolean
@@ -303,9 +304,27 @@ export function SqlImportPanel({ onClose }: { onClose: () => void }) {
             // Apply layout
             const layoutResult = LayoutEngine.autoLayout(nodes, edges, { direction: 'TB' })
 
+            // Calculate smart orthogonal paths for edges
+            const smartEdges = layoutResult.edges.map(edge => {
+                const sourceNode = layoutResult.nodes.find(n => n.id === edge.source);
+                const targetNode = layoutResult.nodes.find(n => n.id === edge.target);
+
+                if (sourceNode && targetNode && (edge.type === 'relationship' || edge.type === 'manyToMany')) {
+                    const pathPoints = calculateSmartOrthogonalPath(sourceNode, targetNode, layoutResult.nodes);
+                    return {
+                        ...edge,
+                        data: {
+                            ...edge.data,
+                            pathPoints
+                        }
+                    };
+                }
+                return edge;
+            });
+
             // Update the store
             setNodes(layoutResult.nodes)
-            setEdges(edges)
+            setEdges(smartEdges)
 
             // Apply auto-layout to optimize positioning
             setTimeout(() => {

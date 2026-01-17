@@ -1,7 +1,7 @@
 "use client"
 
 import { memo, useState, useCallback } from 'react';
-import { Handle, Position, NodeProps } from 'reactflow';
+import { Handle, Position, NodeProps, NodeResizer } from 'reactflow';
 import { KeyRound, Link, Fingerprint, Plus, Trash2, Edit3, Check, X, AlertTriangle, XCircle, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDiagramStore } from '@/store/use-diagram-store';
@@ -224,9 +224,16 @@ const TableNode = ({ data, selected, id, type }: NodeProps<TableNodeData>) => {
 
     return (
         <>
+            <NodeResizer
+                minWidth={200}
+                minHeight={150}
+                isVisible={selected}
+                lineClassName="border-primary"
+                handleClassName="h-3 w-3 bg-white border-2 border-primary rounded"
+            />
             <div
                 className={cn(
-                    "bg-card border rounded-md shadow-sm min-w-[200px] transition-all",
+                    "bg-card border rounded-md shadow-sm min-w-[200px] transition-all w-full h-full",
                     selected ? "border-primary ring-1 ring-primary shadow-lg scale-[1.01]" : "border-border",
                     getValidationBorderColor()
                 )}

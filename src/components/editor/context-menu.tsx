@@ -188,26 +188,26 @@ export const TableContextMenu = memo(({
                     alert('No other tables available for many-to-many relationship');
                     return;
                 }
-                
+
                 const tableNames = otherTables.map(n => n.data.label);
                 const selection = prompt(
                     `Select target table for many-to-many relationship:\n${tableNames.map((name, i) => `${i + 1}. ${name}`).join('\n')}\n\nEnter number or table name:`,
                     ''
                 );
-                
+
                 if (!selection?.trim()) return;
-                
+
                 let targetTable;
                 const selectedIndex = parseInt(selection.trim());
-                
+
                 if (selectedIndex >= 1 && selectedIndex <= tableNames.length) {
                     targetTable = otherTables[selectedIndex - 1];
                 } else {
-                    targetTable = otherTables.find(n => 
+                    targetTable = otherTables.find(n =>
                         n.data.label.toLowerCase() === selection.trim().toLowerCase()
                     );
                 }
-                
+
                 if (targetTable) {
                     createJunctionTable(tableId, targetTable.id);
                 } else {
@@ -380,7 +380,7 @@ export const RelationshipContextMenu = memo(({
     position: { x: number; y: number };
     onClose: () => void;
 }) => {
-    const { deleteRelationship, updateEdgePathPoints } = useDiagramStore();
+    const { deleteRelationship, resetEdgePath } = useDiagramStore();
 
     const actions: ContextMenuAction[] = [
         {
@@ -388,7 +388,7 @@ export const RelationshipContextMenu = memo(({
             label: 'Reset Edge Path',
             icon: <Edit3 className="w-3 h-3" />,
             onClick: () => {
-                updateEdgePathPoints(edgeId, []);
+                resetEdgePath(edgeId);
             }
         },
         {

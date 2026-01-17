@@ -25,12 +25,12 @@ export class LayoutEngine {
   };
 
   static autoLayout(
-    nodes: Node<TableNodeData>[], 
-    edges: Edge[], 
+    nodes: Node<TableNodeData>[],
+    edges: Edge[],
     options: Partial<LayoutOptions> = {}
   ): LayoutResult {
     const layoutOptions = { ...this.DEFAULT_OPTIONS, ...options };
-    
+
     // Create a new directed graph
     const g = new dagre.graphlib.Graph();
     g.setGraph({
@@ -46,7 +46,7 @@ export class LayoutEngine {
     nodes.forEach((node) => {
       const nodeWidth = this.estimateNodeWidth(node);
       const nodeHeight = this.estimateNodeHeight(node);
-      
+
       g.setNode(node.id, {
         width: nodeWidth,
         height: nodeHeight,
@@ -78,7 +78,7 @@ export class LayoutEngine {
     });
 
     // Optimize edge paths if requested
-    const layoutedEdges = layoutOptions.minimizeEdgeCrossings 
+    const layoutedEdges = layoutOptions.minimizeEdgeCrossings
       ? this.optimizeEdgePaths(edges, layoutedNodes)
       : edges;
 
@@ -89,9 +89,9 @@ export class LayoutEngine {
   }
 
   static forceDirectedLayout(
-    nodes: Node<TableNodeData>[], 
-    edges: Edge[], 
-    width: number, 
+    nodes: Node<TableNodeData>[],
+    edges: Edge[],
+    width: number,
     height: number
   ): LayoutResult {
     // Simple force-directed layout implementation
@@ -108,18 +108,18 @@ export class LayoutEngine {
       for (let j = i + 1; j < layoutedNodes.length; j++) {
         const nodeA = layoutedNodes[i];
         const nodeB = layoutedNodes[j];
-        
+
         const dx = nodeA.position.x - nodeB.position.x;
         const dy = nodeA.position.y - nodeB.position.y;
         const distance = Math.sqrt(dx * dx + dy * dy) || 1;
-        
+
         const force = 5000 / (distance * distance);
         const fx = (dx / distance) * force;
         const fy = (dy / distance) * force;
-        
+
         const forceA = forces.get(nodeA.id)!;
         const forceB = forces.get(nodeB.id)!;
-        
+
         forceA.x += fx;
         forceA.y += fy;
         forceB.x -= fx;
@@ -131,19 +131,19 @@ export class LayoutEngine {
     edges.forEach(edge => {
       const sourceNode = layoutedNodes.find(n => n.id === edge.source);
       const targetNode = layoutedNodes.find(n => n.id === edge.target);
-      
+
       if (sourceNode && targetNode) {
         const dx = targetNode.position.x - sourceNode.position.x;
         const dy = targetNode.position.y - sourceNode.position.y;
         const distance = Math.sqrt(dx * dx + dy * dy) || 1;
-        
+
         const force = distance * 0.01;
         const fx = (dx / distance) * force;
         const fy = (dy / distance) * force;
-        
+
         const sourceForce = forces.get(sourceNode.id)!;
         const targetForce = forces.get(targetNode.id)!;
-        
+
         sourceForce.x += fx;
         sourceForce.y += fy;
         targetForce.x -= fx;
@@ -156,7 +156,7 @@ export class LayoutEngine {
       const force = forces.get(node.id)!;
       node.position.x += force.x * 0.1;
       node.position.y += force.y * 0.1;
-      
+
       // Keep nodes within bounds
       node.position.x = Math.max(50, Math.min(width - 200, node.position.x));
       node.position.y = Math.max(50, Math.min(height - 150, node.position.y));
@@ -169,18 +169,18 @@ export class LayoutEngine {
   }
 
   static hierarchicalGroupLayout(
-    nodes: Node<TableNodeData>[], 
-    edges: Edge[], 
+    nodes: Node<TableNodeData>[],
+    edges: Edge[],
     groupBy: 'schema' | 'relationship' = 'relationship'
   ): LayoutResult {
     // Group nodes by their relationships or schemas
     const groups = new Map<string, Node<TableNodeData>[]>();
-    
+
     if (groupBy === 'relationship') {
       // Find connected components
       const visited = new Set<string>();
       const components: string[][] = [];
-      
+
       nodes.forEach(node => {
         if (!visited.has(node.id)) {
           const component: string[] = [];
@@ -188,7 +188,7 @@ export class LayoutEngine {
           components.push(component);
         }
       });
-      
+
       // Create groups from components
       components.forEach((component, index) => {
         const groupNodes = nodes.filter(n => component.includes(n.id));
@@ -211,8 +211,8 @@ export class LayoutEngine {
     let xOffset = 50;
 
     groups.forEach((groupNodes, groupName) => {
-      const groupEdges = edges.filter(e => 
-        groupNodes.some(n => n.id === e.source) && 
+      const groupEdges = edges.filter(e =>
+        groupNodes.some(n => n.id === e.source) &&
         groupNodes.some(n => n.id === e.target)
       );
 
@@ -232,7 +232,7 @@ export class LayoutEngine {
       // Update offset for next group
       const groupWidth = Math.max(...groupLayout.nodes.map(n => n.position.x + 200));
       const groupHeight = Math.max(...groupLayout.nodes.map(n => n.position.y + 150));
-      
+
       if (xOffset + groupWidth > 800) {
         xOffset = 50;
         yOffset += groupHeight + 100;
@@ -248,16 +248,16 @@ export class LayoutEngine {
   }
 
   private static dfs(
-    nodeId: string, 
-    edges: Edge[], 
-    visited: Set<string>, 
+    nodeId: string,
+    edges: Edge[],
+    visited: Set<string>,
     component: string[]
   ): void {
     if (visited.has(nodeId)) return;
-    
+
     visited.add(nodeId);
     component.push(nodeId);
-    
+
     edges.forEach(edge => {
       if (edge.source === nodeId && !visited.has(edge.target)) {
         this.dfs(edge.target, edges, visited, component);
@@ -315,22 +315,27 @@ export class LayoutEngine {
   private static optimizeEdgePaths(edges: Edge[], nodes: Node[]): Edge[] {
     // Simple edge optimization - could be enhanced with more sophisticated algorithms
     return edges.map(edge => {
+      // Don't modify custom relationship edges
+      if (edge.type && ['relationship', 'manyToMany', 'editableRelationship'].includes(edge.type)) {
+        return edge;
+      }
+
       const sourceNode = nodes.find(n => n.id === edge.source);
       const targetNode = nodes.find(n => n.id === edge.target);
-      
+
       if (sourceNode && targetNode) {
         // Determine if edge should be animated based on distance
         const dx = targetNode.position.x - sourceNode.position.x;
         const dy = targetNode.position.y - sourceNode.position.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
-        
+
         return {
           ...edge,
           animated: distance > 300, // Animate long edges
           type: distance > 200 ? 'smoothstep' : 'straight',
         };
       }
-      
+
       return edge;
     });
   }
