@@ -29,7 +29,7 @@ import UnifiedToolbar from './unified-toolbar';
 import ChatPanel from './chat-panel';
 import { PerformancePanel } from './performance-panel';
 import { PerformanceEngine } from '@/lib/performance-engine';
-import { AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle, XCircle, Sparkles, Loader2 } from 'lucide-react';
 
 const CanvasContent = () => {
     // Memoize nodeTypes and edgeTypes to prevent re-creation warnings
@@ -48,6 +48,13 @@ const CanvasContent = () => {
     const [exportPanelOpen, setExportPanelOpen] = useState(false);
     const [performancePanelOpen, setPerformancePanelOpen] = useState(false);
     const [performanceEngine] = useState(() => new PerformanceEngine());
+    const [aiStatusSummary, setAiStatusSummary] = useState<{
+        overall: 'healthy' | 'warning' | 'critical';
+        score: number;
+        insights: Array<{ category: string; status: string; recommendation: string }>;
+        nextSteps: string[];
+    } | null>(null);
+    const [isLoadingAiSummary, setIsLoadingAiSummary] = useState(false);
     const {
         nodes,
         edges,
@@ -229,6 +236,39 @@ const CanvasContent = () => {
         return 'Valid';
     };
 
+    const fetchAIStatusSummary = async () => {
+        setIsLoadingAiSummary(true);
+        try {
+            const performanceMetrics = performanceEngine.getMetrics();
+            const response = await fetch('/api/ai/status-summary', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    nodes,
+                    edges,
+                    validationResults: validationIssues,
+                    performanceMetrics
+                })
+            });
+
+            const result = await response.json();
+            if (result.success && result.data) {
+                setAiStatusSummary(result.data);
+            }
+        } catch (error: any) {
+            console.error('AI Status Summary Error:', error);
+        } finally {
+            setIsLoadingAiSummary(false);
+        }
+    };
+
+    // Fetch AI summary when validation results change
+    useEffect(() => {
+        if (validationEnabled && validationResult) {
+            fetchAIStatusSummary();
+        }
+    }, [validationResult, validationEnabled, nodes, edges]);
+
     return (
         <div className="w-full h-full bg-background transition-colors duration-300">
             <ReactFlow
@@ -379,11 +419,20 @@ const CanvasContent = () => {
 
                 {/* Validation Status Panel */}
                 {validationEnabled && (
-                    <Panel position="top-left" className="bg-card/95 backdrop-blur-sm border border-border rounded-lg shadow-lg p-3">
-                        <div className="flex items-center gap-2 text-sm">
+                    <Panel position="top-left" className="bg-card/95 backdrop-blur-sm border border-border rounded-lg shadow-lg p-3 max-w-md">
+                        <div className="flex items-center gap-2 text-sm mb-2">
                             {getValidationStatusIcon()}
                             <span className="font-medium">{getValidationStatusText()}</span>
                             <span className="text-muted-foreground">Score: {validationScore}</span>
+                            {aiStatusSummary && (
+                                <span className={`text-xs px-2 py-0.5 rounded ${
+                                    aiStatusSummary.overall === 'healthy' ? 'bg-green-100 text-green-700' :
+                                    aiStatusSummary.overall === 'warning' ? 'bg-yellow-100 text-yellow-700' :
+                                    'bg-red-100 text-red-700'
+                                }`}>
+                                    AI: {aiStatusSummary.overall} ({aiStatusSummary.score})
+                                </span>
+                            )}
                             <button
                                 onClick={() => setValidationPanelOpen(true)}
                                 className="px-2 py-1 bg-primary text-primary-foreground rounded text-xs hover:bg-primary/90"
@@ -391,7 +440,34 @@ const CanvasContent = () => {
                                 Details
                             </button>
                         </div>
-                        <div className="flex items-center gap-2 mt-2 text-xs">
+
+                        {/* AI Insights */}
+                        {aiStatusSummary && aiStatusSummary.insights && aiStatusSummary.insights.length > 0 && (
+                            <div className="mb-2 space-y-1">
+                                {aiStatusSummary.insights.slice(0, 2).map((insight, idx) => (
+                                    <div key={idx} className="text-xs text-muted-foreground">
+                                        <span className="font-medium">{insight.category}:</span> {insight.status}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* AI Next Steps */}
+                        {aiStatusSummary && aiStatusSummary.nextSteps && aiStatusSummary.nextSteps.length > 0 && (
+                            <div className="mb-2 p-2 bg-purple-50 dark:bg-purple-900/20 rounded border border-purple-200 dark:border-purple-800">
+                                <div className="flex items-center gap-1 mb-1">
+                                    <Sparkles className="w-3 h-3 text-purple-600" />
+                                    <span className="text-xs font-medium text-purple-900 dark:text-purple-100">AI Next Steps</span>
+                                </div>
+                                <ul className="text-xs text-purple-800 dark:text-purple-200 space-y-0.5">
+                                    {aiStatusSummary.nextSteps.slice(0, 2).map((step, idx) => (
+                                        <li key={idx}>• {step}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+
+                        <div className="flex items-center gap-2 text-xs">
                             <label className="flex items-center gap-1">
                                 <input
                                     type="checkbox"
@@ -406,6 +482,18 @@ const CanvasContent = () => {
                                 className="text-muted-foreground hover:text-foreground"
                             >
                                 Refresh
+                            </button>
+                            <button
+                                onClick={fetchAIStatusSummary}
+                                disabled={isLoadingAiSummary}
+                                className="text-purple-600 hover:text-purple-800 disabled:opacity-50 flex items-center gap-1"
+                                title="Refresh AI Summary"
+                            >
+                                {isLoadingAiSummary ? (
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                    <Sparkles className="w-3 h-3" />
+                                )}
                             </button>
                         </div>
                     </Panel>
