@@ -160,6 +160,40 @@ let validationTimeout: NodeJS.Timeout | null = null;
  */
 
 
+/**
+ * Migration helper to ensure old edges work with new per-column handles
+ */
+const migrateEdgeHandles = (edges: Edge[]): Edge[] => {
+    return edges.map(edge => {
+        if (!edge.sourceHandle || !edge.targetHandle) return edge;
+
+        let updated = false;
+        const newEdge = { ...edge };
+
+        // Migrate source handle format
+        if (newEdge.sourceHandle && !newEdge.sourceHandle.includes('-source') && !newEdge.sourceHandle.includes('-target')) {
+            if (!newEdge.sourceHandle.startsWith(newEdge.source + '-')) {
+                newEdge.sourceHandle = `${newEdge.source}-${newEdge.sourceHandle}-source`;
+            } else {
+                newEdge.sourceHandle = `${newEdge.sourceHandle}-source`;
+            }
+            updated = true;
+        }
+
+        // Migrate target handle format
+        if (newEdge.targetHandle && !newEdge.targetHandle.includes('-target') && !newEdge.targetHandle.includes('-source')) {
+            if (!newEdge.targetHandle.startsWith(newEdge.target + '-')) {
+                newEdge.targetHandle = `${newEdge.target}-${newEdge.targetHandle}-target`;
+            } else {
+                newEdge.targetHandle = `${newEdge.targetHandle}-target`;
+            }
+            updated = true;
+        }
+
+        return updated ? newEdge : edge;
+    });
+};
+
 export const useDiagramStore = create<DiagramStore>((set, get) => ({
     // Initial state
     nodes: [
@@ -228,27 +262,23 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
     onNodesChange: (changes: NodeChange[]) => {
         const currentNodes = get().nodes;
         const newNodes = applyNodeChanges(changes, currentNodes);
-
-        // Find edges connected to changed nodes and recalculate paths if they are not manual
         const currentEdges = get().edges;
-        const changedNodeIds = new Set(changes.map((c: any) => c.id).filter(Boolean));
 
-        const updatedEdges = currentEdges.map(edge => {
-            if (changedNodeIds.has(edge.source) || changedNodeIds.has(edge.target)) {
-                // Only recalculate if NOT manual
-                if (!edge.data?.isManualPath) {
-                    const sourceNode = newNodes.find(n => n.id === edge.source);
-                    const targetNode = newNodes.find(n => n.id === edge.target);
-                    if (sourceNode && targetNode) {
-                        const pathPoints = calculateSmartOrthogonalPath(sourceNode, targetNode, newNodes);
-                        return {
-                            ...edge,
-                            data: {
-                                ...edge.data,
-                                pathPoints
-                            }
-                        };
-                    }
+        // Recalculate paths for ALL non-manual edges to handle obstacles moving into paths
+        const updatedEdges = currentEdges.map((edge: Edge) => {
+            // Only recalculate if NOT manual and endpoints exist
+            if (!edge.data?.isManualPath) {
+                const sourceNode = newNodes.find(n => n.id === edge.source);
+                const targetNode = newNodes.find(n => n.id === edge.target);
+                if (sourceNode && targetNode) {
+                    const pathPoints = calculateSmartOrthogonalPath(sourceNode, targetNode, newNodes, edge.id);
+                    return {
+                        ...edge,
+                        data: {
+                            ...edge.data,
+                            pathPoints
+                        }
+                    };
                 }
             }
             return edge;
@@ -339,72 +369,144 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
 
         if (!sourceNode || !targetNode || sourceNode.id === targetNode.id) return;
 
-        // Smart Relationship Logic:
-        // 1. Identify parent (source) and child (target)
-        // 2. Parent must have a PK
-        const sourcePK = sourceNode.data.columns.find((c: Column) => c.isPrimaryKey);
-        if (!sourcePK) {
-            console.warn('Source table must have a primary key to create a relationship');
-            // Still allow connection but maybe as a warning
-            set({
-                edges: addEdge({ ...connection, type: 'relationship', data: { isValid: false } }, edges),
-            });
+        // Regex to detect table-level handles (e.g. "tableId-table-top-source")
+        const tableHandlePattern = /-table-(top|bottom|left|right)-(source|target)$/;
+
+        // 1. Resolve Source Column
+        let sourceColId = '';
+        if (connection.sourceHandle && !tableHandlePattern.test(connection.sourceHandle)) {
+            // It's likely a column handle: "tableId-columnId-source"
+            const parts = connection.sourceHandle.split('-');
+            // Safety check: ensure enough parts
+            if (parts.length >= 3) {
+                // columnId is the segment before 'source'
+                sourceColId = parts.slice(0, -1).slice(1).join('-');
+                // Wait, simple split is risky if IDs have dashes. 
+                // Better strategy: We know the suffix is "-source".
+                // We know the prefix is `${sourceNode.id}-`.
+                // So columnId is the middle.
+                const prefix = `${sourceNode.id}-`;
+                const suffix = '-source';
+                if (connection.sourceHandle.startsWith(prefix) && connection.sourceHandle.endsWith(suffix)) {
+                    sourceColId = connection.sourceHandle.substring(prefix.length, connection.sourceHandle.length - suffix.length);
+                }
+            }
+        }
+
+        // 2. Resolve Target Column
+        let targetColId = '';
+        if (connection.targetHandle && !tableHandlePattern.test(connection.targetHandle)) {
+            const prefix = `${targetNode.id}-`;
+            const suffix = '-target';
+            if (connection.targetHandle.startsWith(prefix) && connection.targetHandle.endsWith(suffix)) {
+                targetColId = connection.targetHandle.substring(prefix.length, connection.targetHandle.length - suffix.length);
+            }
+        }
+
+        const sourceCol = sourceColId
+            ? sourceNode.data.columns.find((c: Column) => c.id === sourceColId)
+            : (sourceNode.data.columns.find((c: Column) => c.isPrimaryKey) || sourceNode.data.columns[0]);
+
+        if (!sourceCol) {
+            console.error(`Link Error: Could not resolve source column. Node: ${sourceNode.data.label}, Handle: ${connection.sourceHandle}`);
             return;
         }
 
-        // 3. Check if target already has an FK referencing this table
-        const desiredFKName = `${sourceNode.data.label.toLowerCase()}_id`;
-        const existingFK = targetNode.data.columns.find((c: Column) =>
-            c.name.toLowerCase() === desiredFKName.toLowerCase() ||
-            (c.isForeignKey && c.referencedTable === sourceNode.data.label)
-        );
+        let targetCol = targetColId
+            ? targetNode.data.columns.find((c: Column) => c.id === targetColId)
+            : null;
 
-        let finalTargetColumnName = existingFK?.name || desiredFKName;
+        // 2. Automated FK Logic:
+        let finalTargetColumnName = '';
         let finalNodes = nodes;
 
-        if (!existingFK) {
-            // 4. Automatically create FK column in target
-            const newFK: Column = {
-                id: `c${Date.now()}`,
-                name: desiredFKName,
-                type: sourcePK.type,
-                isPrimaryKey: false,
-                isForeignKey: true,
-                isNullable: false,
-                isIndexed: true,
-                referencedTable: sourceNode.data.label,
-                referencedColumn: sourcePK.name,
-            };
+        if (targetCol) {
+            // Use specific target column selected by user
+            finalTargetColumnName = targetCol.name;
 
-            finalNodes = nodes.map(node => {
-                if (node.id === targetNode.id) {
-                    return {
-                        ...node,
-                        data: {
-                            ...node.data,
-                            columns: [...node.data.columns, newFK]
-                        }
-                    };
-                }
-                return node;
-            });
+            // If it's not already a foreign key, we might want to update it
+            if (!targetCol.isForeignKey) {
+                finalNodes = nodes.map(node => {
+                    if (node.id === targetNode.id) {
+                        return {
+                            ...node,
+                            data: {
+                                ...node.data,
+                                columns: node.data.columns.map((c: Column) =>
+                                    c.id === targetColId
+                                        ? {
+                                            ...c,
+                                            isForeignKey: true,
+                                            referencedTable: sourceNode.data.label,
+                                            referencedColumn: sourceCol.name
+                                        }
+                                        : c
+                                )
+                            }
+                        };
+                    }
+                    return node;
+                });
+            }
+        } else {
+            // Default automated logic: find existing FK by naming convention or create new
+            const desiredFKName = `${sourceNode.data.label.toLowerCase()}_id`;
+            const existingFK = targetNode.data.columns.find((c: Column) =>
+                c.name.toLowerCase() === desiredFKName.toLowerCase() ||
+                (c.isForeignKey && c.referencedTable === sourceNode.data.label)
+            );
+
+            if (existingFK) {
+                finalTargetColumnName = existingFK.name;
+                targetCol = existingFK;
+            } else {
+                // Create new FK column
+                const newFK: Column = {
+                    id: `c${Date.now()}`,
+                    name: desiredFKName,
+                    type: sourceCol.type,
+                    isPrimaryKey: false,
+                    isForeignKey: true,
+                    isNullable: false,
+                    isIndexed: true,
+                    referencedTable: sourceNode.data.label,
+                    referencedColumn: sourceCol.name,
+                };
+
+                finalTargetColumnName = desiredFKName;
+                targetCol = newFK;
+
+                finalNodes = nodes.map(node => {
+                    if (node.id === targetNode.id) {
+                        return {
+                            ...node,
+                            data: {
+                                ...node.data,
+                                columns: [...node.data.columns, newFK]
+                            }
+                        };
+                    }
+                    return node;
+                });
+            }
         }
 
-        // 5. Create the edge with semantic data
+        // 3. Create the edge with semantic data and specific handles
         const newEdge: Edge = {
             id: `rel_${sourceNode.id}_${targetNode.id}_${Date.now()}`,
             source: connection.source as string,
             target: connection.target as string,
-            sourceHandle: connection.sourceHandle,
-            targetHandle: connection.targetHandle,
+            // Ensure we use column-specific handles for visual stability
+            sourceHandle: connection.sourceHandle || `${sourceNode.id}-${sourceCol.id}-source`,
+            targetHandle: connection.targetHandle || `${targetNode.id}-${targetCol.id}-target`,
             type: 'relationship',
             data: {
                 relationship: {
                     sourceTable: sourceNode.data.label,
-                    sourceColumn: sourcePK.name,
+                    sourceColumn: sourceCol.name,
                     targetTable: targetNode.data.label,
                     targetColumn: finalTargetColumnName,
-                    cardinality: '1:N', // Default to 1:N
+                    cardinality: '1:N',
                     isIdentifying: true,
                 },
                 isValid: true,
@@ -412,17 +514,19 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
             animated: false,
         };
 
+        // Recalculate smart path for the new edge immediately
+        const pathNodes = finalNodes;
+        const pathPoints = calculateSmartOrthogonalPath(sourceNode, targetNode, pathNodes, newEdge.id);
+        newEdge.data.pathPoints = pathPoints;
+
         set({
             nodes: finalNodes,
             edges: addEdge(newEdge, edges),
         });
 
         // Auto-validation with debouncing
-        if (validationEnabled) {
-            const currentTimeout = get().validationTimeout;
-            if (currentTimeout) clearTimeout(currentTimeout);
-            const timeoutId = setTimeout(() => get().runValidation(), 1000);
-            set({ validationTimeout: timeoutId });
+        if (get().autoValidationEnabled) {
+            get().runValidationDebounced();
         }
     },
     setNodes: (nodes) => set({ nodes }),
@@ -445,7 +549,7 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
     detectRelationships: () => {
         const { nodes, setEdges } = get();
         const relationships = RelationshipDetector.detectRelationships(nodes);
-        const relationshipEdges = RelationshipDetector.relationshipsToEdges(relationships);
+        const relationshipEdges = RelationshipDetector.relationshipsToEdges(relationships, nodes);
         const validatedEdges = RelationshipDetector.validateAndHighlightEdges(nodes, relationshipEdges);
         setEdges(validatedEdges);
     },
@@ -599,7 +703,7 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
         set({ nodes: updatedNodes });
     },
     deleteColumn: (tableId, columnId) => {
-        const { nodes } = get();
+        const { nodes, edges } = get();
         const updatedNodes = nodes.map(node =>
             node.id === tableId
                 ? {
@@ -611,7 +715,15 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
                 }
                 : node
         );
-        set({ nodes: updatedNodes });
+
+        // Remove edges connected to this column's handles
+        const columnHandlePrefix = `${tableId}-${columnId}-`;
+        const updatedEdges = edges.filter(edge =>
+            !(edge.sourceHandle?.startsWith(columnHandlePrefix)) &&
+            !(edge.targetHandle?.startsWith(columnHandlePrefix))
+        );
+
+        set({ nodes: updatedNodes, edges: updatedEdges });
     },
     renameColumn: (tableId, columnId, newName) => {
         const { nodes } = get();
@@ -759,14 +871,14 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
         });
 
         // Calculate smart orthogonal path points to avoid overlapping with other nodes/edges
-        const pathPoints = calculateSmartOrthogonalPath(parentNode, childNode, nodes);
+        const pathPoints = calculateSmartOrthogonalPath(parentNode, childNode, nodes, edgeId);
 
         const newEdge: Edge = {
             id: edgeId,
             source: parentNode.id,
             target: childNode.id,
-            sourceHandle: pkColumn.id,
-            targetHandle: fkColumn.id,
+            sourceHandle: `${parentNode.id}-${pkColumn.id}-source`,
+            targetHandle: `${childNode.id}-${fkColumn.id}-target`,
             type: 'relationship',
             data: {
                 relationship: {
@@ -1137,16 +1249,18 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
             if (!saved) return false;
 
             const data = JSON.parse(saved);
+            const migratedEdges = migrateEdgeHandles(data.edges || []);
+
             set({
                 nodes: data.nodes || [],
-                edges: data.edges || [],
+                edges: migratedEdges,
                 selectedNodes: data.selectedNodes || [],
                 snapshots: data.snapshots || [],
                 history: {
                     past: [],
                     present: {
                         nodes: data.nodes || [],
-                        edges: data.edges || [],
+                        edges: migratedEdges,
                         selectedNodes: data.selectedNodes || [],
                         selectedEdges: data.selectedEdges || []
                     },
@@ -1177,16 +1291,18 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
                 throw new Error('Invalid data format');
             }
 
+            const migratedEdges = migrateEdgeHandles(data.edges || []);
+
             set({
                 nodes: data.nodes || [],
-                edges: data.edges || [],
+                edges: migratedEdges,
                 selectedNodes: data.selectedNodes || [],
                 snapshots: data.snapshots || [],
                 history: {
                     past: [],
                     present: {
                         nodes: data.nodes || [],
-                        edges: data.edges || [],
+                        edges: migratedEdges,
                         selectedNodes: data.selectedNodes || [],
                         selectedEdges: data.selectedEdges || []
                     },
@@ -1313,7 +1429,7 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
             const targetNode = nodes.find(n => n.id === edge.target);
 
             const pathPoints = (sourceNode && targetNode)
-                ? calculateSmartOrthogonalPath(sourceNode, targetNode, nodes)
+                ? calculateSmartOrthogonalPath(sourceNode, targetNode, nodes, edgeId)
                 : [];
 
             return {
@@ -1456,6 +1572,8 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
             id: `rel_${sourceNode.id}_${junctionTableId}_${Date.now()}`,
             source: sourceNode.id,
             target: junctionTableId,
+            sourceHandle: `${sourceNode.id}-${sourcePK.id}-source`,
+            targetHandle: `${junctionTableId}-${junctionTable.data.columns[0].id}-target`,
             type: 'relationship',
             data: {
                 relationship: {
@@ -1475,6 +1593,8 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
             id: `rel_${junctionTableId}_${targetNode.id}_${Date.now()}`,
             source: junctionTableId,
             target: targetNode.id,
+            sourceHandle: `${junctionTableId}-${junctionTable.data.columns[1].id}-source`,
+            targetHandle: `${targetNode.id}-${targetPK.id}-target`,
             type: 'relationship',
             data: {
                 relationship: {

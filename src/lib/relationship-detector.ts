@@ -32,7 +32,7 @@ export interface ValidationResult {
 export class RelationshipDetector {
   static detectJunctionTables(nodes: Node[]): JunctionTable[] {
     const junctionTables: JunctionTable[] = [];
-    
+
     nodes.forEach(node => {
       if (node.type === 'junctionTable') {
         const data = node.data as {
@@ -54,14 +54,14 @@ export class RelationshipDetector {
         });
       }
     });
-    
+
     return junctionTables;
   }
 
   static detectManyToManyRelationships(nodes: Node[]): Relationship[] {
     const junctionTables = this.detectJunctionTables(nodes);
     const manyToManyRelationships: Relationship[] = [];
-    
+
     junctionTables.forEach(junction => {
       // Create N:M relationship between source and target tables
       const relationship: Relationship = {
@@ -73,10 +73,10 @@ export class RelationshipDetector {
         cardinality: 'N:M',
         junctionTable: junction.name
       };
-      
+
       manyToManyRelationships.push(relationship);
     });
-    
+
     return manyToManyRelationships;
   }
   static detectRelationships(nodes: Node<TableNodeData>[]): Relationship[] {
@@ -130,20 +130,41 @@ export class RelationshipDetector {
     return relationships;
   }
 
-  static relationshipsToEdges(relationships: Relationship[]): Edge[] {
+  static relationshipsToEdges(relationships: Relationship[], nodes: Node[]): Edge[] {
     return relationships.map(rel => {
       const edgeType = rel.cardinality === 'N:M' ? 'manyToMany' : 'relationship';
-      
+      const sourceId = rel.sourceTable.toLowerCase().replace(/\s+/g, '_');
+      const targetId = rel.targetTable.toLowerCase().replace(/\s+/g, '_');
+
+      // Attempt to find nodes and column IDs for handles
+      const sourceNode = nodes.find(n => n.id === sourceId || n.data.label.toLowerCase() === rel.sourceTable.toLowerCase());
+      const targetNode = nodes.find(n => n.id === targetId || n.data.label.toLowerCase() === rel.targetTable.toLowerCase());
+
+      let sourceHandle = undefined;
+      let targetHandle = undefined;
+
+      if (sourceNode) {
+        const col = sourceNode.data.columns.find((c: Column) => c.name === rel.sourceColumn);
+        if (col) sourceHandle = `${sourceNode.id}-${col.id}-source`;
+      }
+
+      if (targetNode) {
+        const col = targetNode.data.columns.find((c: Column) => c.name === rel.targetColumn);
+        if (col) targetHandle = `${targetNode.id}-${col.id}-target`;
+      }
+
       return {
         id: rel.id,
-        source: rel.sourceTable.toLowerCase().replace(/\s+/g, '_'),
-        target: rel.targetTable.toLowerCase().replace(/\s+/g, '_'),
+        source: sourceId,
+        target: targetId,
+        sourceHandle,
+        targetHandle,
         type: edgeType,
         data: {
           relationship: rel,
           label: `${rel.sourceColumn} → ${rel.targetColumn}`,
           cardinality: rel.cardinality,
-          isValid: true, // Will be updated by validation
+          isValid: true,
           hasJunctionTable: !!rel.junctionTable,
         },
         animated: rel.cardinality === 'N:M' ? true : false,

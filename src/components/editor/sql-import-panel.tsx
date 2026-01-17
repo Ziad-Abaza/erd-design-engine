@@ -163,8 +163,8 @@ export function SqlImportPanel({ onClose }: { onClose: () => void }) {
                             id: `fk_${targetTableId}_${targetColumn.id}_to_${sourceTableId}_${sourceColumn.id}`,
                             source: targetTableId, // Parent
                             target: sourceTableId, // Child
-                            sourceHandle: targetColumn.id,
-                            targetHandle: sourceColumn.id,
+                            sourceHandle: `${targetTableId}-${targetColumn.id}-source`,
+                            targetHandle: `${sourceTableId}-${sourceColumn.id}-target`,
                             type: 'relationship',
                             animated: false,
                             data: {
@@ -278,8 +278,8 @@ export function SqlImportPanel({ onClose }: { onClose: () => void }) {
                                 id: `fk_${targetTableId}_${targetColumn.id}_to_${sourceTableId}_${sourceColumn.id}`,
                                 source: targetTableId, // Parent
                                 target: sourceTableId, // Child
-                                sourceHandle: targetColumn.id,
-                                targetHandle: sourceColumn.id,
+                                sourceHandle: `${targetTableId}-${targetColumn.id}-source`,
+                                targetHandle: `${sourceTableId}-${sourceColumn.id}-target`,
                                 type: 'relationship',
                                 animated: false,
                                 data: {
@@ -310,7 +310,7 @@ export function SqlImportPanel({ onClose }: { onClose: () => void }) {
                 const targetNode = layoutResult.nodes.find(n => n.id === edge.target);
 
                 if (sourceNode && targetNode && (edge.type === 'relationship' || edge.type === 'manyToMany')) {
-                    const pathPoints = calculateSmartOrthogonalPath(sourceNode, targetNode, layoutResult.nodes);
+                    const pathPoints = calculateSmartOrthogonalPath(sourceNode, targetNode, layoutResult.nodes, edge.id);
                     return {
                         ...edge,
                         data: {

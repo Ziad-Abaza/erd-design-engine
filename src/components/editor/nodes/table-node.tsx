@@ -233,7 +233,7 @@ const TableNode = ({ data, selected, id, type }: NodeProps<TableNodeData>) => {
             />
             <div
                 className={cn(
-                    "bg-card border rounded-md shadow-sm min-w-[200px] transition-all w-full h-full",
+                    "bg-card border rounded-md shadow-sm min-w-[200px] transition-all w-full h-full group",
                     selected ? "border-primary ring-1 ring-primary shadow-lg scale-[1.01]" : "border-border",
                     getValidationBorderColor()
                 )}
@@ -316,7 +316,7 @@ const TableNode = ({ data, selected, id, type }: NodeProps<TableNodeData>) => {
                             ) : (
                                 <div
                                     className={cn(
-                                        "flex items-center justify-between text-xs gap-2 p-1 rounded transition-colors cursor-default",
+                                        "relative flex items-center justify-between text-xs gap-2 p-1 rounded transition-colors cursor-default group/column",
                                         col.isPrimaryKey ? "hover:bg-yellow-50 dark:hover:bg-yellow-900/20" : "hover:bg-muted",
                                         draggedColumn?.columnId === col.id && "opacity-50",
                                         getColumnValidationBorderColor(col.id)
@@ -328,7 +328,16 @@ const TableNode = ({ data, selected, id, type }: NodeProps<TableNodeData>) => {
                                     onDragEnd={handleDragEnd}
                                     onContextMenu={(e) => handleColumnContextMenu(e, col)}
                                 >
-                                    <div className="flex items-center gap-1.5 overflow-hidden flex-1">
+                                    {/* Connection Points (Handles) */}
+                                    <Handle
+                                        type="target"
+                                        position={Position.Left}
+                                        id={`${id}-${col.id}-target`}
+                                        className="!left-[-4px] !opacity-0 group-hover/column:!opacity-100 !w-2 !h-2 !bg-blue-500 !border-white transition-opacity z-10"
+                                        style={{ top: '50%', transform: 'translateY(-50%)' }}
+                                    />
+
+                                    <div className="flex items-center gap-1.5 overflow-hidden flex-1 pointer-events-none">
                                         {col.isPrimaryKey && <KeyRound className="w-3 h-3 text-yellow-500 shrink-0" />}
                                         {col.isForeignKey && <Link className="w-3 h-3 text-blue-500 shrink-0" />}
                                         {col.isUnique && !col.isPrimaryKey && <Fingerprint className="w-3 h-3 text-purple-500 shrink-0" />}
@@ -348,10 +357,10 @@ const TableNode = ({ data, selected, id, type }: NodeProps<TableNodeData>) => {
                                             </div>
                                         )}
                                     </div>
-                                    <div className="flex items-center gap-1.5 text-muted-foreground shrink-0">
+                                    <div className="flex items-center gap-1.5 text-muted-foreground shrink-0 pointer-events-none">
                                         <span className="text-[10px] uppercase opacity-70">{col.type}</span>
                                         {col.isNullable && <span className="text-[9px] border border-border px-0.5 rounded text-muted-foreground/70">NULL</span>}
-                                        <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <div className="flex gap-0.5 opacity-0 group-hover/column:opacity-100 transition-opacity pointer-events-auto">
                                             <button
                                                 onClick={() => setEditingColumn(col.id)}
                                                 className="text-muted-foreground hover:text-foreground p-0.5"
@@ -372,6 +381,14 @@ const TableNode = ({ data, selected, id, type }: NodeProps<TableNodeData>) => {
                                             </button>
                                         </div>
                                     </div>
+
+                                    <Handle
+                                        type="source"
+                                        position={Position.Right}
+                                        id={`${id}-${col.id}-source`}
+                                        className="!right-[-4px] !opacity-0 group-hover/column:!opacity-100 !w-2 !h-2 !bg-blue-500 !border-white transition-opacity z-10"
+                                        style={{ top: '50%', transform: 'translateY(-50%)' }}
+                                    />
                                 </div>
                             )}
                         </div>
@@ -440,15 +457,69 @@ const TableNode = ({ data, selected, id, type }: NodeProps<TableNodeData>) => {
                     )}
                 </div>
 
+                {/* Table-level handles for general connections (Source and Target on all sides) */}
+                {/* Top Handles */}
+                <Handle
+                    type="target"
+                    position={Position.Top}
+                    id={`${id}-table-top-target`}
+                    className="!bg-blue-400 !border-white !w-3.5 !h-3.5 !opacity-0 group-hover:!opacity-80 transition-all z-20 hover:!scale-150 hover:!opacity-100"
+                    style={{ left: '60%' }}
+                />
+                <Handle
+                    type="source"
+                    position={Position.Top}
+                    id={`${id}-table-top-source`}
+                    className="!bg-blue-600 !border-white !w-3.5 !h-3.5 !opacity-0 group-hover:!opacity-80 transition-all z-20 hover:!scale-150 hover:!opacity-100"
+                    style={{ left: '40%' }}
+                />
+
+                {/* Bottom Handles */}
+                <Handle
+                    type="target"
+                    position={Position.Bottom}
+                    id={`${id}-table-bottom-target`}
+                    className="!bg-blue-400 !border-white !w-3.5 !h-3.5 !opacity-0 group-hover:!opacity-80 transition-all z-20 hover:!scale-150 hover:!opacity-100"
+                    style={{ left: '40%' }}
+                />
+                <Handle
+                    type="source"
+                    position={Position.Bottom}
+                    id={`${id}-table-bottom-source`}
+                    className="!bg-blue-600 !border-white !w-3.5 !h-3.5 !opacity-0 group-hover:!opacity-80 transition-all z-20 hover:!scale-150 hover:!opacity-100"
+                    style={{ left: '60%' }}
+                />
+
+                {/* Left Handles */}
                 <Handle
                     type="target"
                     position={Position.Left}
-                    className="!bg-primary !border-background !w-2.5 !h-2.5"
+                    id={`${id}-table-left-target`}
+                    className="!bg-blue-400 !border-white !w-3.5 !h-3.5 !opacity-0 group-hover:!opacity-80 transition-all z-20 hover:!scale-150 hover:!opacity-100"
+                    style={{ top: '40%' }}
+                />
+                <Handle
+                    type="source"
+                    position={Position.Left}
+                    id={`${id}-table-left-source`}
+                    className="!bg-blue-600 !border-white !w-3.5 !h-3.5 !opacity-0 group-hover:!opacity-80 transition-all z-20 hover:!scale-150 hover:!opacity-100"
+                    style={{ top: '60%' }}
+                />
+
+                {/* Right Handles */}
+                <Handle
+                    type="target"
+                    position={Position.Right}
+                    id={`${id}-table-right-target`}
+                    className="!bg-blue-400 !border-white !w-3.5 !h-3.5 !opacity-0 group-hover:!opacity-80 transition-all z-20 hover:!scale-150 hover:!opacity-100"
+                    style={{ top: '60%' }}
                 />
                 <Handle
                     type="source"
                     position={Position.Right}
-                    className="!bg-primary !border-background !w-2.5 !h-2.5"
+                    id={`${id}-table-right-source`}
+                    className="!bg-blue-600 !border-white !w-3.5 !h-3.5 !opacity-0 group-hover:!opacity-80 transition-all z-20 hover:!scale-150 hover:!opacity-100"
+                    style={{ top: '40%' }}
                 />
             </div>
 

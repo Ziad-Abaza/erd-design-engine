@@ -1,13 +1,8 @@
-Please improve Smart Orthogonal Edges by implementing the following enhancements:
+Feedback / Behavior Note on Table-Level Handles:
 
-Automatic overlap avoidance: The relationship edges should intelligently avoid overlapping with tables and other edges to maintain a clean and readable diagram.
+Delayed Activation Issue:
+The table-level connection points do work, but only after several attempts to create a connection.
+On the first attempt, connecting points between tables often fails. After a few tries, the connections start working consistently and can be used smoothly with any table.
 
-Auto-Routing: Edges should automatically recalculate and adjust their paths when tables are moved or resized.
-
-Stable Connection Points: Ensure that edges consistently attach to logical and fixed connection points on tables (top, bottom, left, right) to improve visual consistency.
-
-Editable Auto-Generated Edges: Allow users to manually edit Smart Orthogonal Edges that are automatically created when importing a .sql file. Currently, these edges are locked and cannot be adjusted, which limits usability and fine-tuning of the diagram.
-
-These improvements will significantly enhance usability, flexibility, and overall diagram clarity.
-
--you can add any Additional Recommended Improvements 
+Expected Behavior:
+The handles should be fully functional from the very first attempt, without requiring multiple tries. This will improve usability and reduce confusion for users.
