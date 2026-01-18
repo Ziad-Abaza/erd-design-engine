@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useState, useMemo } from 'react';
+import { memo, useState, useMemo, useEffect } from 'react';
 import { useDiagramStore } from '@/store/use-diagram-store';
 import { cn } from '@/lib/utils';
 import { Column } from './nodes/table-node';
@@ -31,8 +31,50 @@ const SuggestionsPanel = memo(() => {
         aiSuggestions,
         isFetchingAISuggestions,
         fetchAISuggestions,
-        applyAISuggestion
+        applyAISuggestion,
+        aiEnabled
     } = useDiagramStore();
+
+    const [currentAiEnabled, setCurrentAiEnabled] = useState(true);
+
+    // Listen for AI settings changes
+    useEffect(() => {
+        const handleAiEnabledChange = (event: CustomEvent) => {
+            if (event.detail && typeof event.detail.enabled === 'boolean') {
+                setCurrentAiEnabled(event.detail.enabled);
+            }
+        };
+
+        const handleSettingsChange = (event: CustomEvent) => {
+            if (event.detail && typeof event.detail.aiEnabled === 'boolean') {
+                setCurrentAiEnabled(event.detail.aiEnabled);
+            }
+        };
+
+        // Load initial setting
+        try {
+            const savedSettings = localStorage.getItem('erd-editor-settings');
+            if (savedSettings) {
+                const settings = JSON.parse(savedSettings);
+                setCurrentAiEnabled(settings.aiEnabled ?? true);
+            }
+        } catch (error) {
+            console.error('Failed to load AI setting:', error);
+        }
+
+        window.addEventListener('aiEnabledChanged', handleAiEnabledChange as EventListener);
+        window.addEventListener('settingsChanged', handleSettingsChange as EventListener);
+
+        return () => {
+            window.removeEventListener('aiEnabledChanged', handleAiEnabledChange as EventListener);
+            window.removeEventListener('settingsChanged', handleSettingsChange as EventListener);
+        };
+    }, []);
+
+    // Initialize currentAiEnabled with store value
+    useEffect(() => {
+        setCurrentAiEnabled(aiEnabled);
+    }, [aiEnabled]);
 
     const fkSuggestions = useMemo(() => suggestForeignKeys(), [suggestForeignKeys]);
     const indexSuggestions = useMemo(() => suggestIndexes(), [suggestIndexes]);
@@ -93,20 +135,22 @@ const SuggestionsPanel = memo(() => {
             <div className="flex items-center gap-2 mb-3">
                 <Lightbulb className="w-4 h-4 text-yellow-500" />
                 <div className="text-sm font-semibold text-foreground">Smart Suggestions</div>
-                <button
-                    onClick={() => fetchAISuggestions()}
-                    disabled={isFetchingAISuggestions}
-                    className={cn(
-                        "ml-auto text-[10px] bg-primary/10 hover:bg-primary/20 text-primary px-2 py-0.5 rounded transition-colors",
-                        isFetchingAISuggestions && "animate-pulse"
-                    )}
-                >
-                    {isFetchingAISuggestions ? 'Thinking...' : 'AI Refresh'}
-                </button>
+                {currentAiEnabled && (
+                    <button
+                        onClick={() => fetchAISuggestions()}
+                        disabled={isFetchingAISuggestions}
+                        className={cn(
+                            "ml-auto text-[10px] bg-primary/10 hover:bg-primary/20 text-primary px-2 py-0.5 rounded transition-colors",
+                            isFetchingAISuggestions && "animate-pulse"
+                        )}
+                    >
+                        {isFetchingAISuggestions ? 'Thinking...' : 'AI Refresh'}
+                    </button>
+                )}
             </div>
 
             {/* AI Suggestions Section */}
-            {aiSuggestions.length > 0 && (
+            {process.env.NEXT_PUBLIC_AI_ENABLED !== 'false' && aiSuggestions.length > 0 && (
                 <div className="mb-4">
                     <button
                         onClick={() => toggleSection('ai')}

@@ -50,6 +50,8 @@ const CanvasContent = () => {
     const [performancePanelOpen, setPerformancePanelOpen] = useState(false);
     const [historyPanelOpen, setHistoryPanelOpen] = useState(false);
     const [importPanelOpen, setImportPanelOpen] = useState(false);
+    const [showMinimap, setShowMinimap] = useState(true);
+
     const {
         nodes,
         edges,
@@ -108,11 +110,36 @@ const CanvasContent = () => {
         const openValidationPanel = () => setValidationPanelOpen(true);
         const openHistoryPanel = () => setHistoryPanelOpen(true);
 
+        const handleMinimapToggle = (event: CustomEvent) => {
+            if (event.detail && typeof event.detail.enabled === 'boolean') {
+                setShowMinimap(event.detail.enabled);
+            }
+        };
+
+        const handleSettingsChange = (event: CustomEvent) => {
+            if (event.detail && typeof event.detail.showMinimap === 'boolean') {
+                setShowMinimap(event.detail.showMinimap);
+            }
+        };
+
+        // Load initial minimap setting from localStorage
+        try {
+            const savedSettings = localStorage.getItem('erd-editor-settings');
+            if (savedSettings) {
+                const settings = JSON.parse(savedSettings);
+                setShowMinimap(settings.showMinimap ?? true);
+            }
+        } catch (error) {
+            console.error('Failed to load minimap setting:', error);
+        }
+
         window.addEventListener('openPerformancePanel', openPerformancePanel);
         window.addEventListener('openExportPanel', openExportPanel);
         window.addEventListener('openImportPanel', openImportPanel);
         window.addEventListener('openValidationPanel', openValidationPanel);
         window.addEventListener('openHistoryPanel', openHistoryPanel);
+        window.addEventListener('minimapToggled', handleMinimapToggle as EventListener);
+        window.addEventListener('settingsChanged', handleSettingsChange as EventListener);
 
         return () => {
             window.removeEventListener('openPerformancePanel', openPerformancePanel);
@@ -120,6 +147,8 @@ const CanvasContent = () => {
             window.removeEventListener('openImportPanel', openImportPanel);
             window.removeEventListener('openValidationPanel', openValidationPanel);
             window.removeEventListener('openHistoryPanel', openHistoryPanel);
+            window.removeEventListener('minimapToggled', handleMinimapToggle as EventListener);
+            window.removeEventListener('settingsChanged', handleSettingsChange as EventListener);
         };
     }, []);
 
@@ -436,22 +465,24 @@ const CanvasContent = () => {
                         showInteractive={false}
                         position="bottom-left"
                     />
-                    <MiniMap
-                        nodeColor={getNodeColor}
-                        maskColor={isDark ? 'rgba(0,0,0,0.1)' : 'rgba(0,0,0,0.05)'}
-                        style={{
-                            backgroundColor: isDark ? 'rgba(17, 24, 39, 0.9)' : 'rgba(255, 255, 255, 0.9)',
-                            height: 140,
-                            width: 200,
-                            border: '1px solid',
-                            borderColor: isDark ? '#374151' : '#e5e7eb',
-                            backdropFilter: 'blur(8px)',
-                        }}
-                        className="rounded-lg shadow-2xl transition-all duration-300 hover:shadow-primary/20 hover:scale-105 border-primary/10"
-                        pannable
-                        zoomable
-                        position="top-left"
-                    />
+                    {showMinimap && (
+                        <MiniMap
+                            nodeColor={getNodeColor}
+                            maskColor={isDark ? 'rgba(0,0,0,0.1)' : 'rgba(0,0,0,0.05)'}
+                            style={{
+                                backgroundColor: isDark ? 'rgba(17, 24, 39, 0.9)' : 'rgba(255, 255, 255, 0.9)',
+                                height: 140,
+                                width: 200,
+                                border: '1px solid',
+                                borderColor: isDark ? '#374151' : '#e5e7eb',
+                                backdropFilter: 'blur(8px)',
+                            }}
+                            className="rounded-lg shadow-2xl transition-all duration-300 hover:shadow-primary/20 hover:scale-105 border-primary/10"
+                            pannable
+                            zoomable
+                            position="top-left"
+                        />
+                    )}
                 </ReactFlow>
             </div>
 

@@ -1,12 +1,16 @@
 import { NextResponse } from 'next/server';
 
 export async function POST(req: Request) {
+    if (process.env.AI_ENABLED === 'false' || process.env.NEXT_PUBLIC_AI_ENABLED === 'false') {
+        return NextResponse.json({ error: 'AI features are disabled' }, { status: 403 });
+    }
+
     try {
         const { prompt, currentSchema } = await req.json();
 
         // Get timeout from environment or use default (5 minutes for large requests)
         const timeout = parseInt(process.env.AI_REQUEST_TIMEOUT || '300000', 10);
-        
+
         // Create AbortController for timeout
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeout);
@@ -32,7 +36,7 @@ export async function POST(req: Request) {
             return NextResponse.json(data);
         } catch (fetchError: any) {
             clearTimeout(timeoutId);
-            
+
             if (fetchError.name === 'AbortError') {
                 throw new Error(`Request timeout after ${timeout}ms. The AI server may be processing a large request.`);
             }

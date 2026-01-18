@@ -116,6 +116,10 @@ export class AIService {
       chunkLargeSchemas?: boolean;
     } = {}
   ): Promise<AIResponse> {
+    if (process.env.AI_ENABLED === 'false' || process.env.NEXT_PUBLIC_AI_ENABLED === 'false') {
+      throw new Error('AI features are currently disabled');
+    }
+
     const useCache = options.useCache ?? this.enableCache;
     const compressContext = options.compressContext ?? this.enableContextCompression;
     const chunkLargeSchemas = options.chunkLargeSchemas ?? true;
@@ -367,6 +371,10 @@ export class AIService {
       compressContext?: boolean;
     } = {}
   ): AsyncGenerator<string> {
+    if (process.env.AI_ENABLED === 'false' || process.env.NEXT_PUBLIC_AI_ENABLED === 'false') {
+      throw new Error('AI features are currently disabled');
+    }
+
     const compressContext = options.compressContext ?? this.enableContextCompression;
 
     // Compress context if enabled

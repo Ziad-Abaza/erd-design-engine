@@ -4,13 +4,21 @@ import { PromptManager } from '@/lib/ai/prompts';
 import { contextManager } from '@/lib/ai';
 
 export async function POST(req: Request) {
+  if (process.env.AI_ENABLED === 'false' || process.env.NEXT_PUBLIC_AI_ENABLED === 'false') {
+    return NextResponse.json({
+      success: false,
+      error: 'AI features are disabled',
+      data: { overall: 'warning', score: 0, insights: [], nextSteps: ['AI features are disabled'] }
+    }, { status: 403 });
+  }
+
   try {
     const { schema, validationResults, performanceMetrics, nodes, edges, useCache, background, priority } = await req.json();
 
     const aiService = getAIService();
-    
+
     // Compress validation results and performance metrics for efficiency
-    const compressedValidation = validationResults 
+    const compressedValidation = validationResults
       ? contextManager.compressValidationResults(validationResults)
       : validationResults;
     const compressedMetrics = performanceMetrics
@@ -45,7 +53,7 @@ export async function POST(req: Request) {
     // Process request with caching, context compression, and token management
     const startTime = Date.now();
     let response: any;
-    
+
     try {
       response = await aiService.processRequest(request, {
         useCache: useCache !== false, // Default to true
@@ -92,13 +100,13 @@ export async function POST(req: Request) {
           return null;
         }
       });
-      
+
       summaryResult = extractJSON(response.content);
     } catch (parseError: any) {
       console.error('JSON Parse Error:', parseError);
       summaryResult = null;
     }
-    
+
     // Fallback if parsing fails
     if (!summaryResult) {
       summaryResult = {
@@ -123,7 +131,7 @@ export async function POST(req: Request) {
     });
   } catch (error: any) {
     console.error('AI Status Summary Error:', error);
-    return NextResponse.json({ 
+    return NextResponse.json({
       success: false,
       error: error.message || 'Unknown error',
       data: {

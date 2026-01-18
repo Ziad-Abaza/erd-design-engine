@@ -21,6 +21,7 @@ const ChatPanel = memo(() => {
     const [inputValue, setInputValue] = useState('');
     const [includeSchema, setIncludeSchema] = useState(true);
     const [enableThinking, setEnableThinking] = useState(false);
+    const [aiEnabled, setAiEnabled] = useState(true);
     const scrollRef = useRef<HTMLDivElement>(null);
 
     const {
@@ -29,6 +30,40 @@ const ChatPanel = memo(() => {
         sendChatMessage,
         clearChat
     } = useDiagramStore();
+
+    // Listen for AI settings changes
+    useEffect(() => {
+        const handleSettingsChange = (event: CustomEvent) => {
+            if (event.detail && typeof event.detail.aiEnabled === 'boolean') {
+                setAiEnabled(event.detail.aiEnabled);
+            }
+        };
+
+        const handleAiEnabledChange = (event: CustomEvent) => {
+            if (event.detail && typeof event.detail.enabled === 'boolean') {
+                setAiEnabled(event.detail.enabled);
+            }
+        };
+
+        // Load initial setting from localStorage
+        try {
+            const savedSettings = localStorage.getItem('erd-editor-settings');
+            if (savedSettings) {
+                const settings = JSON.parse(savedSettings);
+                setAiEnabled(settings.aiEnabled ?? true);
+            }
+        } catch (error) {
+            console.error('Failed to load AI setting:', error);
+        }
+
+        window.addEventListener('settingsChanged', handleSettingsChange as EventListener);
+        window.addEventListener('aiEnabledChanged', handleAiEnabledChange as EventListener);
+
+        return () => {
+            window.removeEventListener('settingsChanged', handleSettingsChange as EventListener);
+            window.removeEventListener('aiEnabledChanged', handleAiEnabledChange as EventListener);
+        };
+    }, []);
 
     useEffect(() => {
         if (scrollRef.current) {
@@ -43,7 +78,13 @@ const ChatPanel = memo(() => {
         await sendChatMessage(msg, { includeSchema, enableThinking });
     };
 
+    // Hide if AI is disabled via settings
+    if (!aiEnabled) {
+        return null;
+    }
+
     return (
+
         <>
             {/* Toggle Button */}
             {!isOpen && (

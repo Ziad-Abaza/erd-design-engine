@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 
 export async function POST(req: Request) {
+    if (process.env.AI_ENABLED === 'false' || process.env.NEXT_PUBLIC_AI_ENABLED === 'false') {
+        return NextResponse.json({ error: 'AI features are disabled' }, { status: 403 });
+    }
+
     try {
         const { tableName, currentSchema } = await req.json();
 

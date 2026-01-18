@@ -40,12 +40,14 @@ interface ValidationPanelProps {
 }
 
 export function ValidationPanel({ isOpen, onClose }: ValidationPanelProps) {
+    const { nodes, edges, aiEnabled } = useDiagramStore();
     const [validationResult, setValidationResult] = useState<ReturnType<typeof ValidationEngine.validateDiagram> | null>(null);
     const [selectedCategory, setSelectedCategory] = useState<ValidationCategory | 'all'>('all');
     const [selectedSeverity, setSelectedSeverity] = useState<ValidationSeverity | 'all'>('all');
     const [expandedIssues, setExpandedIssues] = useState<Set<string>>(new Set());
     const [autoFixing, setAutoFixing] = useState<string | null>(null);
     const [normalizationSuggestions, setNormalizationSuggestions] = useState<NormalizationSuggestion[]>([]);
+    const [currentAiEnabled, setCurrentAiEnabled] = useState(true);
     const [aiValidation, setAiValidation] = useState<{
         summary: string;
         issues: Array<{
@@ -63,11 +65,48 @@ export function ValidationPanel({ isOpen, onClose }: ValidationPanelProps) {
     const [aiValidationError, setAiValidationError] = useState<string | null>(null);
     const [showAiIssues, setShowAiIssues] = useState(true);
 
-    const nodes = useDiagramStore(state => state.nodes);
-    const edges = useDiagramStore(state => state.edges);
     const selectNode = useDiagramStore(state => state.selectNode);
     const createIndex = useDiagramStore(state => state.createIndex);
     const updateColumnProperties = useDiagramStore(state => state.updateColumnProperties);
+
+    // Listen for AI settings changes
+    useEffect(() => {
+        const handleAiEnabledChange = (event: CustomEvent) => {
+            if (event.detail && typeof event.detail.enabled === 'boolean') {
+                setCurrentAiEnabled(event.detail.enabled);
+            }
+        };
+
+        const handleSettingsChange = (event: CustomEvent) => {
+            if (event.detail && typeof event.detail.aiEnabled === 'boolean') {
+                setCurrentAiEnabled(event.detail.aiEnabled);
+            }
+        };
+
+        // Load initial setting
+        try {
+            const savedSettings = localStorage.getItem('erd-editor-settings');
+            if (savedSettings) {
+                const settings = JSON.parse(savedSettings);
+                setCurrentAiEnabled(settings.aiEnabled ?? true);
+            }
+        } catch (error) {
+            console.error('Failed to load AI setting:', error);
+        }
+
+        window.addEventListener('aiEnabledChanged', handleAiEnabledChange as EventListener);
+        window.addEventListener('settingsChanged', handleSettingsChange as EventListener);
+
+        return () => {
+            window.removeEventListener('aiEnabledChanged', handleAiEnabledChange as EventListener);
+            window.removeEventListener('settingsChanged', handleSettingsChange as EventListener);
+        };
+    }, []);
+
+    // Initialize currentAiEnabled with store value
+    useEffect(() => {
+        setCurrentAiEnabled(aiEnabled);
+    }, [aiEnabled]);
 
     useEffect(() => {
         let timeout: NodeJS.Timeout;
@@ -91,7 +130,7 @@ export function ValidationPanel({ isOpen, onClose }: ValidationPanelProps) {
     const runAIValidation = async () => {
         setIsAiValidating(true);
         setAiValidationError(null);
-        
+
         try {
             const response = await fetch('/api/ai/validation', {
                 method: 'POST',
@@ -103,7 +142,7 @@ export function ValidationPanel({ isOpen, onClose }: ValidationPanelProps) {
             });
 
             const result = await response.json();
-            
+
             if (result.success && result.data) {
                 setAiValidation(result.data);
             } else {
@@ -237,23 +276,25 @@ export function ValidationPanel({ isOpen, onClose }: ValidationPanelProps) {
                                 >
                                     Re-run Validation
                                 </button>
-                                <button
-                                    onClick={runAIValidation}
-                                    disabled={isAiValidating}
-                                    className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                                >
-                                    {isAiValidating ? (
-                                        <>
-                                            <Loader2 className="w-4 h-4 animate-spin" />
-                                            AI Analyzing...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Sparkles className="w-4 h-4" />
-                                            AI Analysis
-                                        </>
-                                    )}
-                                </button>
+                                {currentAiEnabled && (
+                                    <button
+                                        onClick={runAIValidation}
+                                        disabled={isAiValidating}
+                                        className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                    >
+                                        {isAiValidating ? (
+                                            <>
+                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                                AI Analyzing...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Sparkles className="w-4 h-4" />
+                                                AI Analysis
+                                            </>
+                                        )}
+                                    </button>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -292,14 +333,14 @@ export function ValidationPanel({ isOpen, onClose }: ValidationPanelProps) {
                 </div>
 
                 {/* AI Validation Error */}
-                {aiValidationError && (
+                {currentAiEnabled && aiValidationError && (
                     <div className="mx-6 mt-4 p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-800">
                         {aiValidationError}
                     </div>
                 )}
 
                 {/* AI Validation Summary */}
-                {aiValidation && aiValidation.summary && (
+                {currentAiEnabled && aiValidation && aiValidation.summary && (
                     <div className="mx-6 mt-4 p-4 bg-purple-50 border border-purple-200 rounded-lg">
                         <div className="flex items-center gap-2 mb-2">
                             <Sparkles className="w-5 h-5 text-purple-600" />
@@ -319,7 +360,7 @@ export function ValidationPanel({ isOpen, onClose }: ValidationPanelProps) {
                 <div className="flex-1 overflow-y-auto p-6">
                     <div className="space-y-6">
                         {/* AI Validation Issues */}
-                        {showAiIssues && aiValidation && aiValidation.issues && aiValidation.issues.length > 0 && (
+                        {currentAiEnabled && showAiIssues && aiValidation && aiValidation.issues && aiValidation.issues.length > 0 && (
                             <div>
                                 <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
                                     <Sparkles className="w-5 h-5 text-purple-600" />

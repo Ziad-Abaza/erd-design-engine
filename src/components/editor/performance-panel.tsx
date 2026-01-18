@@ -3,13 +3,13 @@
 import React, { useState, useEffect } from 'react';
 import { useDiagramStore } from '@/store/use-diagram-store';
 import { PerformanceEngine, PerformanceConfig, PerformanceMetrics, TableGroup } from '@/lib/performance-engine';
-import { 
-  Settings, 
-  Activity, 
-  Layers, 
-  Zap, 
-  Monitor, 
-  Clock, 
+import {
+  Settings,
+  Activity,
+  Layers,
+  Zap,
+  Monitor,
+  Clock,
   Database,
   AlertTriangle,
   CheckCircle,
@@ -29,13 +29,14 @@ interface PerformancePanelProps {
 }
 
 export function PerformancePanel({ isOpen, onClose }: PerformancePanelProps) {
-  const { nodes, edges, setNodes } = useDiagramStore();
+  const { nodes, edges, setNodes, aiEnabled } = useDiagramStore();
   const [performanceEngine] = useState(() => new PerformanceEngine());
   const [metrics, setMetrics] = useState<PerformanceMetrics | null>(null);
   const [config, setConfig] = useState<PerformanceConfig>(performanceEngine.getConfig());
   const [tableGroups, setTableGroups] = useState<TableGroup[]>([]);
   const [recommendations, setRecommendations] = useState<string[]>([]);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [currentAiEnabled, setCurrentAiEnabled] = useState(true);
   const [aiAnalysis, setAiAnalysis] = useState<{
     summary: string;
     recommendations: Array<{
@@ -53,12 +54,51 @@ export function PerformancePanel({ isOpen, onClose }: PerformancePanelProps) {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
+  // Listen for AI settings changes
+  useEffect(() => {
+    const handleAiEnabledChange = (event: CustomEvent) => {
+      if (event.detail && typeof event.detail.enabled === 'boolean') {
+        setCurrentAiEnabled(event.detail.enabled);
+      }
+    };
+
+    const handleSettingsChange = (event: CustomEvent) => {
+      if (event.detail && typeof event.detail.aiEnabled === 'boolean') {
+        setCurrentAiEnabled(event.detail.aiEnabled);
+      }
+    };
+
+    // Load initial setting
+    try {
+      const savedSettings = localStorage.getItem('erd-editor-settings');
+      if (savedSettings) {
+        const settings = JSON.parse(savedSettings);
+        setCurrentAiEnabled(settings.aiEnabled ?? true);
+      }
+    } catch (error) {
+      console.error('Failed to load AI setting:', error);
+    }
+
+    window.addEventListener('aiEnabledChanged', handleAiEnabledChange as EventListener);
+    window.addEventListener('settingsChanged', handleSettingsChange as EventListener);
+
+    return () => {
+      window.removeEventListener('aiEnabledChanged', handleAiEnabledChange as EventListener);
+      window.removeEventListener('settingsChanged', handleSettingsChange as EventListener);
+    };
+  }, []);
+
+  // Initialize currentAiEnabled with store value
+  useEffect(() => {
+    setCurrentAiEnabled(aiEnabled);
+  }, [aiEnabled]);
+
   useEffect(() => {
     if (isOpen) {
       updateMetrics();
       updateTableGroups();
       updateRecommendations();
-      
+
       const interval = setInterval(updateMetrics, 3000);
       return () => clearInterval(interval);
     }
@@ -88,7 +128,7 @@ export function PerformancePanel({ isOpen, onClose }: PerformancePanelProps) {
   const toggleGroup = (groupId: string) => {
     performanceEngine.toggleGroupCollapse(groupId);
     updateTableGroups();
-    
+
     const newExpanded = new Set(expandedGroups);
     if (newExpanded.has(groupId)) {
       newExpanded.delete(groupId);
@@ -117,7 +157,7 @@ export function PerformancePanel({ isOpen, onClose }: PerformancePanelProps) {
   const runAIAnalysis = async () => {
     setIsAnalyzing(true);
     setAiError(null);
-    
+
     try {
       const response = await fetch('/api/ai/performance', {
         method: 'POST',
@@ -130,7 +170,7 @@ export function PerformancePanel({ isOpen, onClose }: PerformancePanelProps) {
       });
 
       const result = await response.json();
-      
+
       if (result.success && result.data) {
         setAiAnalysis(result.data);
       } else {
@@ -150,27 +190,27 @@ export function PerformancePanel({ isOpen, onClose }: PerformancePanelProps) {
 
   const getPerformanceScore = () => {
     if (!metrics) return 0;
-    
+
     let score = 100;
-    
+
     // FPS penalty
     if (metrics.fps < 30) score -= 30;
     else if (metrics.fps < 45) score -= 15;
     else if (metrics.fps < 55) score -= 5;
-    
+
     // Render time penalty
     if (metrics.renderTime > 50) score -= 25;
     else if (metrics.renderTime > 30) score -= 15;
     else if (metrics.renderTime > 16) score -= 5;
-    
+
     // Memory usage penalty
     if (metrics.memoryUsage && metrics.memoryUsage > 150) score -= 20;
     else if (metrics.memoryUsage && metrics.memoryUsage > 100) score -= 10;
-    
+
     // Node count penalty
     if (metrics.totalNodes > 200) score -= 15;
     else if (metrics.totalNodes > 100) score -= 5;
-    
+
     return Math.max(0, score);
   };
 
@@ -210,11 +250,10 @@ export function PerformancePanel({ isOpen, onClose }: PerformancePanelProps) {
                 </span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className={`h-2 rounded-full transition-all duration-300 ${
-                    getPerformanceScore() >= 80 ? 'bg-green-500' :
-                    getPerformanceScore() >= 60 ? 'bg-yellow-500' : 'bg-red-500'
-                  }`}
+                <div
+                  className={`h-2 rounded-full transition-all duration-300 ${getPerformanceScore() >= 80 ? 'bg-green-500' :
+                      getPerformanceScore() >= 60 ? 'bg-yellow-500' : 'bg-red-500'
+                    }`}
                   style={{ width: `${getPerformanceScore()}%` }}
                 />
               </div>
@@ -243,29 +282,26 @@ export function PerformancePanel({ isOpen, onClose }: PerformancePanelProps) {
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">FPS</span>
-                  <span className={`font-medium ${
-                    metrics.fps >= 55 ? 'text-green-600' :
-                    metrics.fps >= 30 ? 'text-yellow-600' : 'text-red-600'
-                  }`}>
+                  <span className={`font-medium ${metrics.fps >= 55 ? 'text-green-600' :
+                      metrics.fps >= 30 ? 'text-yellow-600' : 'text-red-600'
+                    }`}>
                     {metrics.fps}
                   </span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Render Time</span>
-                  <span className={`font-medium ${
-                    metrics.renderTime <= 16 ? 'text-green-600' :
-                    metrics.renderTime <= 30 ? 'text-yellow-600' : 'text-red-600'
-                  }`}>
+                  <span className={`font-medium ${metrics.renderTime <= 16 ? 'text-green-600' :
+                      metrics.renderTime <= 30 ? 'text-yellow-600' : 'text-red-600'
+                    }`}>
                     {metrics.renderTime.toFixed(1)}ms
                   </span>
                 </div>
                 {metrics.memoryUsage && (
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Memory Usage</span>
-                    <span className={`font-medium ${
-                      metrics.memoryUsage <= 50 ? 'text-green-600' :
-                      metrics.memoryUsage <= 100 ? 'text-yellow-600' : 'text-red-600'
-                    }`}>
+                    <span className={`font-medium ${metrics.memoryUsage <= 50 ? 'text-green-600' :
+                        metrics.memoryUsage <= 100 ? 'text-yellow-600' : 'text-red-600'
+                      }`}>
                       {metrics.memoryUsage.toFixed(1)}MB
                     </span>
                   </div>
@@ -292,14 +328,12 @@ export function PerformancePanel({ isOpen, onClose }: PerformancePanelProps) {
                 <label className="text-sm text-gray-700">Lazy Rendering</label>
                 <button
                   onClick={() => handleConfigChange('enableLazyRendering', !config.enableLazyRendering)}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    config.enableLazyRendering ? 'bg-blue-600' : 'bg-gray-200'
-                  }`}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${config.enableLazyRendering ? 'bg-blue-600' : 'bg-gray-200'
+                    }`}
                 >
                   <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      config.enableLazyRendering ? 'translate-x-6' : 'translate-x-1'
-                    }`}
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${config.enableLazyRendering ? 'translate-x-6' : 'translate-x-1'
+                      }`}
                   />
                 </button>
               </div>
@@ -307,14 +341,12 @@ export function PerformancePanel({ isOpen, onClose }: PerformancePanelProps) {
                 <label className="text-sm text-gray-700">Table Grouping</label>
                 <button
                   onClick={() => handleConfigChange('enableGrouping', !config.enableGrouping)}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    config.enableGrouping ? 'bg-blue-600' : 'bg-gray-200'
-                  }`}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${config.enableGrouping ? 'bg-blue-600' : 'bg-gray-200'
+                    }`}
                 >
                   <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      config.enableGrouping ? 'translate-x-6' : 'translate-x-1'
-                    }`}
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${config.enableGrouping ? 'translate-x-6' : 'translate-x-1'
+                      }`}
                   />
                 </button>
               </div>
@@ -322,14 +354,12 @@ export function PerformancePanel({ isOpen, onClose }: PerformancePanelProps) {
                 <label className="text-sm text-gray-700">Background Layout</label>
                 <button
                   onClick={() => handleConfigChange('enableBackgroundLayout', !config.enableBackgroundLayout)}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    config.enableBackgroundLayout ? 'bg-blue-600' : 'bg-gray-200'
-                  }`}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${config.enableBackgroundLayout ? 'bg-blue-600' : 'bg-gray-200'
+                    }`}
                 >
                   <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      config.enableBackgroundLayout ? 'translate-x-6' : 'translate-x-1'
-                    }`}
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${config.enableBackgroundLayout ? 'translate-x-6' : 'translate-x-1'
+                      }`}
                   />
                 </button>
               </div>
@@ -424,114 +454,112 @@ export function PerformancePanel({ isOpen, onClose }: PerformancePanelProps) {
           )}
 
           {/* AI Analysis Section */}
-          <div className="p-4 border-b border-gray-200">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-purple-600" />
-                AI Performance Analysis
-              </h3>
-              <button
-                onClick={runAIAnalysis}
-                disabled={isAnalyzing}
-                className="px-3 py-1 text-xs bg-purple-100 text-purple-700 rounded hover:bg-purple-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-              >
-                {isAnalyzing ? (
-                  <>
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                    Analyzing...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-3 h-3" />
-                    Run AI Analysis
-                  </>
-                )}
-              </button>
-            </div>
-
-            {aiError && (
-              <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-800">
-                {aiError}
+          {currentAiEnabled && (
+            <div className="p-4 border-b border-gray-200">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-purple-600" />
+                  AI Performance Analysis
+                </h3>
+                <button
+                  onClick={runAIAnalysis}
+                  disabled={isAnalyzing}
+                  className="px-3 py-1 text-xs bg-purple-100 text-purple-700 rounded hover:bg-purple-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                >
+                  {isAnalyzing ? (
+                    <>
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      Analyzing...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-3 h-3" />
+                      Run AI Analysis
+                    </>
+                  )}
+                </button>
               </div>
-            )}
 
-            {aiAnalysis && (
-              <div className="space-y-3">
-                {/* AI Summary */}
-                {aiAnalysis.summary && (
-                  <div className="p-3 bg-purple-50 border border-purple-200 rounded">
-                    <div className="text-xs font-medium text-purple-900 mb-1">AI Summary</div>
-                    <div className="text-sm text-purple-800">{aiAnalysis.summary}</div>
-                  </div>
-                )}
+              {aiError && (
+                <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-800">
+                  {aiError}
+                </div>
+              )}
 
-                {/* AI Metrics */}
-                {aiAnalysis.metrics && (
-                  <div className="p-2 bg-gray-50 border border-gray-200 rounded text-xs">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-gray-600">Estimated Improvement:</span>
-                      <span className="font-medium text-green-600">{aiAnalysis.metrics.estimatedImprovement}</span>
+              {aiAnalysis && (
+                <div className="space-y-3">
+                  {/* AI Summary */}
+                  {aiAnalysis.summary && (
+                    <div className="p-3 bg-purple-50 border border-purple-200 rounded">
+                      <div className="text-xs font-medium text-purple-900 mb-1">AI Summary</div>
+                      <div className="text-sm text-purple-800">{aiAnalysis.summary}</div>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-600">Risk Level:</span>
-                      <span className={`font-medium ${
-                        aiAnalysis.metrics.riskLevel === 'low' ? 'text-green-600' :
-                        aiAnalysis.metrics.riskLevel === 'medium' ? 'text-yellow-600' : 'text-red-600'
-                      }`}>
-                        {aiAnalysis.metrics.riskLevel}
-                      </span>
-                    </div>
-                  </div>
-                )}
+                  )}
 
-                {/* AI Recommendations */}
-                {aiAnalysis.recommendations && aiAnalysis.recommendations.length > 0 && (
-                  <div>
-                    <div className="text-xs font-medium text-gray-700 mb-2">AI Recommendations</div>
-                    <div className="space-y-2">
-                      {aiAnalysis.recommendations.map((rec, index) => (
-                        <div
-                          key={index}
-                          className={`p-3 border rounded ${
-                            rec.priority === 'high' ? 'bg-red-50 border-red-200' :
-                            rec.priority === 'medium' ? 'bg-yellow-50 border-yellow-200' :
-                            'bg-blue-50 border-blue-200'
-                          }`}
-                        >
-                          <div className="flex items-start justify-between mb-1">
-                            <div className="flex items-center gap-2">
-                              <span className={`text-xs font-medium px-2 py-0.5 rounded ${
-                                rec.type === 'index' ? 'bg-blue-100 text-blue-700' :
-                                rec.type === 'query' ? 'bg-green-100 text-green-700' :
-                                rec.type === 'schema' ? 'bg-purple-100 text-purple-700' :
-                                'bg-orange-100 text-orange-700'
-                              }`}>
-                                {rec.type}
-                              </span>
-                              <span className={`text-xs px-2 py-0.5 rounded ${
-                                rec.priority === 'high' ? 'bg-red-200 text-red-800' :
-                                rec.priority === 'medium' ? 'bg-yellow-200 text-yellow-800' :
-                                'bg-gray-200 text-gray-800'
-                              }`}>
-                                {rec.priority}
-                              </span>
+                  {/* AI Metrics */}
+                  {aiAnalysis.metrics && (
+                    <div className="p-2 bg-gray-50 border border-gray-200 rounded text-xs">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-gray-600">Estimated Improvement:</span>
+                        <span className="font-medium text-green-600">{aiAnalysis.metrics.estimatedImprovement}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-600">Risk Level:</span>
+                        <span className={`font-medium ${aiAnalysis.metrics.riskLevel === 'low' ? 'text-green-600' :
+                            aiAnalysis.metrics.riskLevel === 'medium' ? 'text-yellow-600' : 'text-red-600'
+                          }`}>
+                          {aiAnalysis.metrics.riskLevel}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* AI Recommendations */}
+                  {aiAnalysis.recommendations && aiAnalysis.recommendations.length > 0 && (
+                    <div>
+                      <div className="text-xs font-medium text-gray-700 mb-2">AI Recommendations</div>
+                      <div className="space-y-2">
+                        {aiAnalysis.recommendations.map((rec, index) => (
+                          <div
+                            key={index}
+                            className={`p-3 border rounded ${rec.priority === 'high' ? 'bg-red-50 border-red-200' :
+                                rec.priority === 'medium' ? 'bg-yellow-50 border-yellow-200' :
+                                  'bg-blue-50 border-blue-200'
+                              }`}
+                          >
+                            <div className="flex items-start justify-between mb-1">
+                              <div className="flex items-center gap-2">
+                                <span className={`text-xs font-medium px-2 py-0.5 rounded ${rec.type === 'index' ? 'bg-blue-100 text-blue-700' :
+                                    rec.type === 'query' ? 'bg-green-100 text-green-700' :
+                                      rec.type === 'schema' ? 'bg-purple-100 text-purple-700' :
+                                        'bg-orange-100 text-orange-700'
+                                  }`}>
+                                  {rec.type}
+                                </span>
+                                <span className={`text-xs px-2 py-0.5 rounded ${rec.priority === 'high' ? 'bg-red-200 text-red-800' :
+                                    rec.priority === 'medium' ? 'bg-yellow-200 text-yellow-800' :
+                                      'bg-gray-200 text-gray-800'
+                                  }`}>
+                                  {rec.priority}
+                                </span>
+                              </div>
                             </div>
+                            <div className="text-sm text-gray-800 mb-1">{rec.description}</div>
+                            <div className="text-xs text-gray-600 mb-2">Impact: {rec.impact}</div>
+                            {rec.sql && (
+                              <div className="mt-2 p-2 bg-gray-100 rounded font-mono text-xs text-gray-700 overflow-x-auto">
+                                {rec.sql}
+                              </div>
+                            )}
                           </div>
-                          <div className="text-sm text-gray-800 mb-1">{rec.description}</div>
-                          <div className="text-xs text-gray-600 mb-2">Impact: {rec.impact}</div>
-                          {rec.sql && (
-                            <div className="mt-2 p-2 bg-gray-100 rounded font-mono text-xs text-gray-700 overflow-x-auto">
-                              {rec.sql}
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Traditional Recommendations */}
           {recommendations.length > 0 && (

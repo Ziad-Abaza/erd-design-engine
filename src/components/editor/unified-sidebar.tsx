@@ -1,15 +1,15 @@
 "use client";
 
-import React, { useState } from 'react';
-import { 
-    Plus, 
-    Sparkles, 
-    RotateCcw, 
-    Trash2, 
-    Link, 
-    Layout, 
-    ChevronDown, 
-    ChevronRight, 
+import React, { useState, useEffect } from 'react';
+import {
+    Plus,
+    Sparkles,
+    RotateCcw,
+    Trash2,
+    Link,
+    Layout,
+    ChevronDown,
+    ChevronRight,
     ChevronLeft,
     ChevronUp,
     Activity,
@@ -40,13 +40,13 @@ interface SidebarSectionProps {
     isCollapsed?: boolean;
 }
 
-const SidebarSection: React.FC<SidebarSectionProps> = ({ 
-    title, 
-    icon, 
-    isExpanded, 
-    onToggle, 
-    children, 
-    isCollapsed = false 
+const SidebarSection: React.FC<SidebarSectionProps> = ({
+    title,
+    icon,
+    isExpanded,
+    onToggle,
+    children,
+    isCollapsed = false
 }) => {
     return (
         <div className="border-b border-border last:border-b-0">
@@ -82,11 +82,12 @@ const UnifiedSidebar: React.FC = () => {
         projectSettings: false,
         quality: false
     });
-    
+
     const [showLayoutOptions, setShowLayoutOptions] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
     const [showExportMenu, setShowExportMenu] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
+    const [currentAiEnabled, setCurrentAiEnabled] = useState(true);
 
     const {
         selectedNodes,
@@ -108,8 +109,48 @@ const UnifiedSidebar: React.FC = () => {
         validationEnabled,
         autoValidationEnabled,
         toggleAutoValidation,
-        getValidationIssues
+        getValidationIssues,
+        aiEnabled
     } = useDiagramStore();
+
+    // Initialize currentAiEnabled with store value
+    useEffect(() => {
+        setCurrentAiEnabled(aiEnabled);
+    }, [aiEnabled]);
+
+    // Listen for AI settings changes
+    useEffect(() => {
+        const handleAiEnabledChange = (event: CustomEvent) => {
+            if (event.detail && typeof event.detail.enabled === 'boolean') {
+                setCurrentAiEnabled(event.detail.enabled);
+            }
+        };
+
+        const handleSettingsChange = (event: CustomEvent) => {
+            if (event.detail && typeof event.detail.aiEnabled === 'boolean') {
+                setCurrentAiEnabled(event.detail.aiEnabled);
+            }
+        };
+
+        // Load initial setting
+        try {
+            const savedSettings = localStorage.getItem('erd-editor-settings');
+            if (savedSettings) {
+                const settings = JSON.parse(savedSettings);
+                setCurrentAiEnabled(settings.aiEnabled ?? true);
+            }
+        } catch (error) {
+            console.error('Failed to load AI setting:', error);
+        }
+
+        window.addEventListener('aiEnabledChanged', handleAiEnabledChange as EventListener);
+        window.addEventListener('settingsChanged', handleSettingsChange as EventListener);
+
+        return () => {
+            window.removeEventListener('aiEnabledChanged', handleAiEnabledChange as EventListener);
+            window.removeEventListener('settingsChanged', handleSettingsChange as EventListener);
+        };
+    }, []);
 
     const toggleSection = (section: keyof typeof expandedSections) => {
         setExpandedSections(prev => ({
@@ -216,18 +257,20 @@ const UnifiedSidebar: React.FC = () => {
                                 Add Table
                             </button>
 
-                            <button
-                                onClick={handleAiCreateTable}
-                                disabled={isGenerating}
-                                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-md transition-all flex items-center justify-center gap-2 p-2 text-sm font-medium disabled:opacity-50"
-                            >
-                                {isGenerating ? (
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                ) : (
-                                    <Sparkles className="w-4 h-4" />
-                                )}
-                                AI Table
-                            </button>
+                            {currentAiEnabled && (
+                                <button
+                                    onClick={handleAiCreateTable}
+                                    disabled={isGenerating}
+                                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-md transition-all flex items-center justify-center gap-2 p-2 text-sm font-medium disabled:opacity-50"
+                                >
+                                    {isGenerating ? (
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : (
+                                        <Sparkles className="w-4 h-4" />
+                                    )}
+                                    AI Table
+                                </button>
+                            )}
 
                             <button
                                 onClick={handleNewProject}
@@ -373,8 +416,8 @@ const UnifiedSidebar: React.FC = () => {
                                     disabled={!canUndo()}
                                     className={cn(
                                         "p-2 rounded-full transition-colors",
-                                        canUndo() 
-                                            ? "hover:bg-accent text-foreground" 
+                                        canUndo()
+                                            ? "hover:bg-accent text-foreground"
                                             : "text-muted-foreground cursor-not-allowed"
                                     )}
                                     title="Undo"
@@ -386,8 +429,8 @@ const UnifiedSidebar: React.FC = () => {
                                     disabled={!canRedo()}
                                     className={cn(
                                         "p-2 rounded-full transition-colors",
-                                        canRedo() 
-                                            ? "hover:bg-accent text-foreground" 
+                                        canRedo()
+                                            ? "hover:bg-accent text-foreground"
                                             : "text-muted-foreground cursor-not-allowed"
                                     )}
                                     title="Redo"
@@ -431,7 +474,10 @@ const UnifiedSidebar: React.FC = () => {
                     >
                         <div className="space-y-2">
                             <button
-                                onClick={runValidation}
+                                onClick={() => {
+                                    const event = new CustomEvent('openValidationPanel');
+                                    window.dispatchEvent(event);
+                                }}
                                 className="w-full bg-card/80 hover:bg-card text-foreground border border-border rounded transition-colors p-2 text-sm font-medium"
                             >
                                 <AlertTriangle className="w-4 h-4 inline mr-2" />

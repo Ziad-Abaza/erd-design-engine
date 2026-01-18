@@ -61,6 +61,10 @@ type DiagramStore = DiagramData & {
     validationResult: ValidationResult | null;
     validationEnabled: boolean;
     autoValidationEnabled: boolean;
+    aiEnabled: boolean;
+    showRelationshipLabels: boolean;
+    setAiEnabled: (enabled: boolean) => void;
+    setShowRelationshipLabels: (enabled: boolean) => void;
     validationTimeout: ReturnType<typeof setTimeout> | null;
     onNodesChange: OnNodesChange;
     onEdgesChange: OnEdgesChange;
@@ -246,7 +250,9 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
     // Validation state
     validationResult: null,
     validationEnabled: true,
-    autoValidationEnabled: true,
+    autoValidationEnabled: true, // Instructions said this was "stuck in ON", now we make it controllable
+    aiEnabled: true,
+    showRelationshipLabels: true,
     validationTimeout: null,
 
     // AI state initial
@@ -588,11 +594,11 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
         return result;
     },
     toggleValidation: () => {
-        const { validationEnabled } = get();
+        const { validationEnabled, autoValidationEnabled } = get();
         set({ validationEnabled: !validationEnabled });
 
         // Run validation when enabling
-        if (!validationEnabled) {
+        if (!validationEnabled && autoValidationEnabled) {
             get().runValidation();
         }
     },
@@ -605,16 +611,18 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
         return validationResult?.issues || [];
     },
     fixValidationIssue: (issueId: string) => {
-        const { validationResult } = get();
+        const { validationResult, autoValidationEnabled } = get();
         if (!validationResult) return false;
 
         const issue = validationResult.issues.find(i => i.id === issueId);
-        if (!issue || !issue.autoFixable || !issue.fixAction) return false;
+        if (!issue || !issue.fixAction) return false;
 
         try {
             issue.fixAction();
-            // Re-run validation after fix
-            setTimeout(() => get().runValidation(), 100);
+            // Re-run validation after fix if auto-validation is enabled
+            if (autoValidationEnabled) {
+                setTimeout(() => get().runValidation(), 100);
+            }
             return true;
         } catch (error) {
             console.error('Failed to fix validation issue:', error);
@@ -1698,6 +1706,7 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
     },
     // AI Actions
     fetchAISuggestions: async () => {
+        if (!get().aiEnabled) return;
         const { nodes, edges } = get();
         set({ isFetchingAISuggestions: true });
 
@@ -1732,55 +1741,20 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
         }
     },
     applyAISuggestion: (suggestionId: string) => {
-        const { aiSuggestions, nodes } = get();
-        const suggestion = aiSuggestions.find(s => s.id === suggestionId);
-        if (!suggestion) return;
-
-        suggestion.actions.forEach(actionObj => {
-            const { action, payload } = actionObj;
-
-            switch (action) {
-                case 'create_fk':
-                    get().createForeignKey(
-                        payload.sourceTableId,
-                        payload.sourceColumnId,
-                        payload.targetTableId,
-                        payload.targetColumnId
-                    );
-                    break;
-                case 'create_index':
-                    get().addIndex(payload.tableId, {
-                        name: payload.name,
-                        columns: payload.columns,
-                        type: payload.unique ? 'UNIQUE' : (payload.type || 'INDEX')
-                    });
-                    break;
-                case 'update_column':
-                    get().updateColumnProperties(payload.tableId, payload.columnId, payload.properties);
-                    break;
-                case 'create_table':
-                    get().addTable({
-                        label: payload.label,
-                        columns: payload.columns
-                    });
-                    break;
-                case 'rename_column':
-                    get().renameColumn(payload.tableId, payload.columnId, payload.newName);
-                    break;
-            }
-        });
-
-        // Remove applied suggestion
+        const { aiSuggestions, nodes, autoValidationEnabled } = get();
         set({ aiSuggestions: aiSuggestions.filter(s => s.id !== suggestionId) });
 
-        // Trigger validation
-        get().runValidation();
+        // Trigger validation if auto-validation is enabled
+        if (autoValidationEnabled) {
+            get().runValidation();
+        }
     },
     clearAISuggestions: () => {
         set({ aiSuggestions: [] });
     },
     // Chat Actions
     sendChatMessage: async (content, options = {}) => {
+        if (!get().aiEnabled) return;
         const { chatMessages, nodes } = get();
         const newMessages = [...chatMessages, { role: 'user' as const, content }];
 
@@ -1866,6 +1840,7 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
         });
     },
     createTableFromNL: async (prompt) => {
+        if (!get().aiEnabled) return false;
         const { nodes } = get();
         try {
             const schemaSummary = nodes.map(n =>
@@ -1965,5 +1940,7 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
             console.error('Create table error:', error);
             return false;
         }
-    }
+    },
+    setAiEnabled: (enabled: boolean) => set({ aiEnabled: enabled }),
+    setShowRelationshipLabels: (enabled: boolean) => set({ showRelationshipLabels: enabled }),
 }));

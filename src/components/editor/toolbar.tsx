@@ -16,6 +16,7 @@ const Toolbar = () => {
     const runValidation = useDiagramStore(state => state.runValidation);
     const clearDiagram = useDiagramStore(state => state.clearDiagram);
     const createTableFromNL = useDiagramStore(state => state.createTableFromNL);
+    const aiEnabled = useDiagramStore(state => state.aiEnabled);
     const [showImportPanel, setShowImportPanel] = useState(false);
     const [showLayoutOptions, setShowLayoutOptions] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
@@ -88,18 +89,20 @@ const Toolbar = () => {
                         </button>
 
                         {/* AI Table Button */}
-                        <button
-                            onClick={handleAiCreateTable}
-                            disabled={isGenerating}
-                            className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-md transition-all flex items-center justify-center gap-2 p-2 text-xs font-medium disabled:opacity-50"
-                        >
-                            {isGenerating ? (
-                                <Loader2 className="w-3 h-3 animate-spin" />
-                            ) : (
-                                <Sparkles className="w-3 h-3" />
-                            )}
-                            + AI Table
-                        </button>
+                        {aiEnabled && (
+                            <button
+                                onClick={handleAiCreateTable}
+                                disabled={isGenerating}
+                                className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-md transition-all flex items-center justify-center gap-2 p-2 text-xs font-medium disabled:opacity-50"
+                            >
+                                {isGenerating ? (
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                    <Sparkles className="w-3 h-3" />
+                                )}
+                                + AI Table
+                            </button>
+                        )}
 
                         {/* New Project Button */}
                         <button

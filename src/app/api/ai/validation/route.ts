@@ -3,9 +3,17 @@ import { getAIService } from '@/lib/ai';
 import { PromptManager } from '@/lib/ai/prompts';
 
 export async function POST(req: Request) {
+  if (process.env.AI_ENABLED === 'false' || process.env.NEXT_PUBLIC_AI_ENABLED === 'false') {
+    return NextResponse.json({
+      success: false,
+      error: 'AI features are disabled',
+      data: { summary: 'AI features are disabled', issues: [] }
+    }, { status: 403 });
+  }
+
   try {
     const body = await req.json();
-    
+
     // Client-side validation to prevent 422 errors
     if (!body || typeof body !== 'object') {
       return NextResponse.json({
@@ -17,9 +25,9 @@ export async function POST(req: Request) {
         }
       }, { status: 400 });
     }
-    
+
     const { schema, validationRules, context, nodes, edges, useCache, background, priority } = body;
-    
+
     // Validate required fields
     if (!nodes && !edges && !schema) {
       return NextResponse.json({
@@ -33,7 +41,7 @@ export async function POST(req: Request) {
     }
 
     const aiService = getAIService();
-    
+
     // Build prompt using prompt manager
     const userPrompt = PromptManager.getValidationPrompt({
       schema,
@@ -62,7 +70,7 @@ export async function POST(req: Request) {
     // Process request with caching, context compression, and token management
     const startTime = Date.now();
     let response: any;
-    
+
     try {
       response = await aiService.processRequest(request, {
         useCache: useCache !== false, // Default to true
@@ -73,7 +81,7 @@ export async function POST(req: Request) {
       });
     } catch (error: any) {
       console.error('AI Service Error:', error);
-      return NextResponse.json({ 
+      return NextResponse.json({
         success: false,
         error: error.message || 'AI service error',
         data: {
@@ -104,7 +112,7 @@ export async function POST(req: Request) {
         return null;
       }
     });
-    
+
     const analysisResult = extractJSON(response.content) || {
       summary: response.content || 'Validation analysis completed',
       issues: []
@@ -122,7 +130,7 @@ export async function POST(req: Request) {
     });
   } catch (error: any) {
     console.error('AI Validation Analysis Error:', error);
-    return NextResponse.json({ 
+    return NextResponse.json({
       success: false,
       error: error.message,
       data: {

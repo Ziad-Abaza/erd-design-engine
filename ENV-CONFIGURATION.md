@@ -20,6 +20,10 @@ AI_API_KEY=
 # GPU/CUDA Configuration
 USE_CUDA=false
 GPU_LAYERS=
+
+# Feature Flags
+NEXT_PUBLIC_AI_ENABLED=true
+AI_ENABLED=true
 ```
 
 ## Model-Specific Configurations

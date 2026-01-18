@@ -15,11 +15,15 @@ const jobStatus = new Map<string, {
 }>();
 
 export async function POST(req: Request) {
+  if (process.env.AI_ENABLED === 'false' || process.env.NEXT_PUBLIC_AI_ENABLED === 'false') {
+    return NextResponse.json({ success: false, error: 'AI features are disabled' }, { status: 403 });
+  }
+
   try {
     const { type, request, priority = 'medium' } = await req.json();
 
     const jobId = `job_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
+
     // Initialize job status
     jobStatus.set(jobId, {
       status: 'pending',

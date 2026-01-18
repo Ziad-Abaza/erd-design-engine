@@ -39,6 +39,7 @@ const DatabaseRelationshipEdge = ({
 }: EdgeProps<DatabaseRelationshipEdgeData>) => {
     const { screenToFlowPosition } = useReactFlow();
     const updateEdgePathPoints = useDiagramStore(state => state.updateEdgePathPoints);
+    const showRelationshipLabels = useDiagramStore(state => state.showRelationshipLabels);
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
     const [isDraggingPoint, setIsDraggingPoint] = useState<number | null>(null);
 
@@ -228,26 +229,28 @@ const DatabaseRelationshipEdge = ({
             />
 
             <EdgeLabelRenderer>
-                <div
-                    style={{
-                        position: 'absolute',
-                        transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
-                        pointerEvents: 'all',
-                    }}
-                    className="nodrag nopan"
-                    onContextMenu={handleContextMenu}
-                >
-                    <div className={cn(
-                        "bg-background/90 backdrop-blur-sm border rounded-full px-2 py-0.5 shadow-sm text-[10px] font-medium transition-all hover:scale-110",
-                        "flex items-center gap-1.5 whitespace-nowrap",
-                        isValid ? (selected ? "border-blue-500 text-blue-600 shadow-blue-100" : "border-slate-200 text-slate-500") : "border-red-500 bg-red-50 text-red-600"
-                    )}>
-                        {!isValid && <AlertTriangle className="w-3 h-3 text-red-500" />}
-                        <span className="opacity-70">{data?.relationship?.sourceColumn}</span>
-                        <span className="font-bold text-slate-400">→</span>
-                        <span className="opacity-70">{data?.relationship?.targetColumn}</span>
+                {showRelationshipLabels && (
+                    <div
+                        style={{
+                            position: 'absolute',
+                            transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
+                            pointerEvents: 'all',
+                        }}
+                        className="nodrag nopan"
+                        onContextMenu={handleContextMenu}
+                    >
+                        <div className={cn(
+                            "bg-background/90 backdrop-blur-sm border rounded-full px-2 py-0.5 shadow-sm text-[10px] font-medium transition-all hover:scale-110",
+                            "flex items-center gap-1.5 whitespace-nowrap",
+                            isValid ? (selected ? "border-blue-500 text-blue-600 shadow-blue-100" : "border-slate-200 text-slate-500") : "border-red-500 bg-red-50 text-red-600"
+                        )}>
+                            {!isValid && <AlertTriangle className="w-3 h-3 text-red-500" />}
+                            <span className="opacity-70">{data?.relationship?.sourceColumn}</span>
+                            <span className="font-bold text-slate-400">→</span>
+                            <span className="opacity-70">{data?.relationship?.targetColumn}</span>
+                        </div>
                     </div>
-                </div>
+                )}
 
                 {/* Draggable waypoints */}
                 {selected && pathPoints.map((point, index) => (
